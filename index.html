@@ -827,15 +827,13 @@ const REPORT_BOTS=[
 ];
 
 tabs.reportGen=function(){
-  // 전체 캠핑장 목록 (monthly 데이터에서 유니크)
   const allNames=[...new Set(D.monthly.map(r=>r.n))].sort((a,b)=>a.localeCompare(b,'ko'));
-  const opts=allNames.map(n=>`<option value="${n}">${n}</option>`).join('');
   return `
   <div class="panel" style="background:linear-gradient(135deg,rgba(78,205,196,.08),rgba(78,205,196,.03));border-color:rgba(78,205,196,.3)">
     <h3><span class="icon" style="background:#4ecdc4"></span>AI 라운드테이블 리포트 생성기</h3>
-    <p style="color:var(--text2);font-size:13px;margin-bottom:16px">업체명을 선택하면 5명의 AI 봇이 실시간으로 분석 리포트를 생성합니다.</p>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:16px">업체명을 입력하면 5명의 AI 봇이 실시간으로 분석 리포트를 생성합니다.</p>
     <div class="filter-row">
-      <select id="rgCamp" style="min-width:300px"><option value="">캠핑장 선택...</option>${opts}</select>
+      <div style="position:relative"><input id="rgCamp" class="search" style="width:350px" placeholder="캠핑장명 입력..." autocomplete="off" oninput="rgAutoComplete()"><div id="rgAC" style="position:absolute;top:100%;left:0;width:350px;max-height:240px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;display:none;z-index:50"></div></div>
       <button class="btn btn-primary" onclick="generateReport()">리포트 생성</button>
       <span id="rgStatus" style="color:var(--text2);font-size:13px"></span>
     </div>
@@ -843,7 +841,23 @@ tabs.reportGen=function(){
   <div id="rgPreview"></div>`;
 };
 
-function initReportGen(){}
+function initReportGen(){
+  document.addEventListener('click',function(e){
+    const ac=document.getElementById('rgAC');
+    if(ac&&!e.target.closest('#rgCamp')&&!e.target.closest('#rgAC'))ac.style.display='none';
+  });
+}
+const _rgNames=(function(){try{return[...new Set(D.monthly.map(r=>r.n))].sort((a,b)=>a.localeCompare(b,'ko'))}catch(e){return[]}})();
+window.rgAutoComplete=function(){
+  const input=document.getElementById('rgCamp');
+  const ac=document.getElementById('rgAC');
+  const q=input.value.trim().toLowerCase();
+  if(!q){ac.style.display='none';return;}
+  const matches=_rgNames.filter(n=>n.toLowerCase().includes(q)).slice(0,15);
+  if(!matches.length){ac.style.display='none';return;}
+  ac.innerHTML=matches.map(n=>`<div style="padding:8px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);color:var(--text)" onmouseover="this.style.background='var(--card2)'" onmouseout="this.style.background=''" onclick="document.getElementById('rgCamp').value='${n.replace(/'/g,"\\'")}';document.getElementById('rgAC').style.display='none'">${n}</div>`).join('');
+  ac.style.display='block';
+};
 
 // 리포트 데이터 수집
 function collectCampData(name){
@@ -1012,8 +1026,10 @@ ${rhtml}
 }
 
 window.generateReport=function(){
-  const name=document.getElementById('rgCamp').value;
-  if(!name)return alert('캠핑장을 선택해주세요.');
+  const raw=document.getElementById('rgCamp').value.trim();
+  if(!raw)return alert('캠핑장명을 입력해주세요.');
+  const name=_rgNames.find(n=>n===raw)||_rgNames.find(n=>n.includes(raw));
+  if(!name)return alert('해당 캠핑장을 찾을 수 없습니다: '+raw);
   const status=document.getElementById('rgStatus');
   status.textContent='생성 중...';
 
