@@ -213,6 +213,9 @@ overview(){
       <label>연도:</label><select id="ovYear" onchange="renderOvRS()">${yearOpts}</select>
       <label>월:</label><select id="ovMonth" onchange="renderOvRS()"><option value="all" selected>전체(누적)</option><option value="1">1월</option><option value="2">2월</option><option value="3">3월</option><option value="4">4월</option><option value="5">5월</option><option value="6">6월</option><option value="7">7월</option><option value="8">8월</option><option value="9">9월</option><option value="10">10월</option><option value="11">11월</option><option value="12">12월</option></select>
       <input class="search" id="ovSearch" placeholder="캠핑장 검색..." oninput="renderOvRS()" style="width:220px">
+      <label>정렬:</label>
+      <select id="ovSortKey" onchange="renderOvRS()"><option value="pay">결제금액</option><option value="cnt">정산건수</option><option value="ref">환불금액</option><option value="md">MD수수료(RS)</option><option value="set">정산지급금액</option><option value="n">캠핑장명</option></select>
+      <select id="ovSortDir" onchange="renderOvRS()"><option value="desc">내림차순</option><option value="asc">오름차순</option></select>
     </div>
     <div class="kpi-row" id="ovKpi"></div>
     <div class="scroll-table rs-table" style="max-height:400px"><table id="ovTable"><thead><tr>
@@ -402,7 +405,13 @@ window.renderOvRS=function(){
     rows=md.map(r=>({n:r.n,pay:r.pay,cnt:r.cnt,ref:r.ref,bf:r.bf,pf:r.pf,pg:r.pg,ptn:r.ptn,md:r.fmd+r.rmd+r.hmd,set:r.set}));
   }
   if(search)rows=rows.filter(r=>r.n.toLowerCase().includes(search));
-  rows.sort((a,b)=>b.pay-a.pay);
+  const sortKey=document.getElementById('ovSortKey')?.value||'pay';
+  const sortAsc=document.getElementById('ovSortDir')?.value==='asc';
+  rows.sort((a,b)=>{
+    let va=a[sortKey],vb=b[sortKey];
+    if(sortKey==='n')return sortAsc?va.localeCompare(vb,'ko'):vb.localeCompare(va,'ko');
+    return sortAsc?va-vb:vb-va;
+  });
   const tPay=rows.reduce((s,r)=>s+r.pay,0);
   const tMd=rows.reduce((s,r)=>s+r.md,0);
   const tCnt=rows.reduce((s,r)=>s+r.cnt,0);
