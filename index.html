@@ -198,22 +198,44 @@ function sumField(arr,f){return arr.reduce((s,r)=>s+(r[f]||0),0)}
 function activeMonthly(){return D.monthly.filter(r=>!isHidden(r.n))}
 function activeYearly(){return D.yearly.filter(r=>!isHidden(r.n))}
 
+// 특정 연도에 존재하는 월 목록
+function getAvailMonths(year){
+  const s=new Set();
+  activeMonthly().filter(r=>r.y===year).forEach(r=>s.add(r.m));
+  return [...s].sort((a,b)=>a-b);
+}
+// 동일 기간 비교용: 월별 데이터를 캠핑장별로 집계
+function aggByPeriod(year,months){
+  const m=activeMonthly().filter(r=>r.y===year&&months.includes(r.m));
+  const map={};
+  m.forEach(r=>{
+    if(!map[r.n])map[r.n]={n:r.n,pay:0,cnt:0,ref:0,set:0,bf:0,pf:0,pg:0,ptn:0,fmd:0,rmd:0,hmd:0};
+    const o=map[r.n];o.pay+=r.pay;o.cnt+=r.cnt;o.ref+=r.ref;o.set+=r.set;
+    o.bf+=r.bf;o.pf+=r.pf;o.pg+=r.pg;o.ptn+=r.ptn;o.fmd+=r.fmd;o.rmd+=r.rmd;o.hmd+=r.hmd;
+  });
+  return map;
+}
 function getYoYData(cy,py){
-  const cur=yearlyBycamp(cy),prev=yearlyBycamp(py),pm={};
-  prev.forEach(r=>{pm[r.n]=r});
+  // 동일 기간 비교: cy에 존재하는 월만 py에서도 비교
+  const curMonths=getAvailMonths(cy);
+  const curMap=aggByPeriod(cy,curMonths);
+  const prevMap=aggByPeriod(py,curMonths);
   const res=[];
-  cur.forEach(r=>{
-    const p=pm[r.n];
+  Object.values(curMap).forEach(r=>{
+    const p=prevMap[r.n];
+    const md=r.fmd+r.rmd+r.hmd, pmd=p?(p.fmd+p.rmd+p.hmd):0;
     res.push({name:r.n,curPay:r.pay,curCnt:r.cnt,curSet:r.set,prevPay:p?p.pay:0,prevCnt:p?p.cnt:0,prevSet:p?p.set:0,
       payChg:p?pctNum(r.pay,p.pay):null,cntChg:p?pctNum(r.cnt,p.cnt):null,
-      mdFee:r.fmd+r.rmd+r.hmd,prevMdFee:p?(p.fmd+p.rmd+p.hmd):0,camp:campMap[r.n]||null});
+      mdFee:md,prevMdFee:pmd,camp:campMap[r.n]||null});
   });
-  prev.forEach(r=>{
-    if(!cur.find(c=>c.n===r.n)){
+  Object.values(prevMap).forEach(r=>{
+    if(!curMap[r.n]){
       res.push({name:r.n,curPay:0,curCnt:0,curSet:0,prevPay:r.pay,prevCnt:r.cnt,prevSet:r.set,
         payChg:-100,cntChg:-100,mdFee:0,prevMdFee:r.fmd+r.rmd+r.hmd,camp:campMap[r.n]||null});
     }
   });
+  // 비교 기간 정보 저장
+  res._period=curMonths;
   return res;
 }
 
@@ -235,12 +257,16 @@ const tabs={
 overview(){
   const camps=activeCamps();
   const ac=camps.filter(c=>c.s==='운영중').length;
-  const y26=yearlyBycamp(2026),y25=yearlyBycamp(2025);
-  const tp26=sumField(y26,'pay'),tp25=sumField(y25,'pay');
-  const tc26=sumField(y26,'cnt');
-  const tm26=y26.reduce((s,r)=>s+r.fmd+r.rmd+r.hmd,0);
-  const tm25=y25.reduce((s,r)=>s+r.fmd+r.rmd+r.hmd,0);
-  const ts26=sumField(y26,'set');
+  // 동일 기간 비교 (2026에 있는 월만 2025에서도 비교)
+  const curMonths26=getAvailMonths(2026);
+  const periodLabel=curMonths26.length?curMonths26[0]+'~'+curMonths26[curMonths26.length-1]+'월':'';
+  const agg26=aggByPeriod(2026,curMonths26), agg25=aggByPeriod(2025,curMonths26);
+  const tp26=Object.values(agg26).reduce((s,r)=>s+r.pay,0);
+  const tp25=Object.values(agg25).reduce((s,r)=>s+r.pay,0);
+  const tc26=Object.values(agg26).reduce((s,r)=>s+r.cnt,0);
+  const tm26=Object.values(agg26).reduce((s,r)=>s+r.fmd+r.rmd+r.hmd,0);
+  const tm25=Object.values(agg25).reduce((s,r)=>s+r.fmd+r.rmd+r.hmd,0);
+  const ts26=Object.values(agg26).reduce((s,r)=>s+r.set,0);
   const pc=pctNum(tp26,tp25);
   const yoy=getYoYData(2026,2025);
   const ranked=yoy.filter(r=>r.prevPay>0).sort((a,b)=>(b.payChg||0)-(a.payChg||0));
@@ -252,10 +278,10 @@ overview(){
   ${hiddenBarHTML()}
   <div class="kpi-row">
     <div class="kpi"><div class="label">총 담당 거래처</div><div class="value">${camps.length}개</div><div class="change"><span class="tag tag-green">${ac}개 운영중</span></div></div>
-    <div class="kpi"><div class="label">2026 총 결제금액 (1~3월)</div><div class="value">${fmt(tp26)}</div><div class="change ${pc>0?'up':'down'}">${pc!==null?(pc>0?'▲':'▼')+Math.abs(pc).toFixed(1)+'% vs 2025 전체':'N/A'}</div></div>
-    <div class="kpi"><div class="label">2026 정산건수</div><div class="value">${fmtN(tc26)}건</div></div>
-    <div class="kpi"><div class="label">2026 MD 수수료(RS)</div><div class="value">${fmt(tm26)}</div><div class="change ${tm26>tm25?'up':'down'}">${tm25>0?((pctNum(tm26,tm25)>0?'▲':'▼')+Math.abs(pctNum(tm26,tm25)).toFixed(1)+'%'):'N/A'} vs 2025</div></div>
-    <div class="kpi"><div class="label">2026 정산금액</div><div class="value">${fmt(ts26)}</div></div>
+    <div class="kpi"><div class="label">2026 결제금액 (${periodLabel})</div><div class="value">${fmt(tp26)}</div><div class="change ${pc>0?'up':'down'}">${pc!==null?(pc>0?'▲':'▼')+Math.abs(pc).toFixed(1)+'% vs 2025 동기간':'N/A'}</div></div>
+    <div class="kpi"><div class="label">2026 정산건수 (${periodLabel})</div><div class="value">${fmtN(tc26)}건</div></div>
+    <div class="kpi"><div class="label">2026 RS수수료 (${periodLabel})</div><div class="value">${fmt(tm26)}</div><div class="change ${tm26>tm25?'up':'down'}">${tm25>0?((pctNum(tm26,tm25)>0?'▲':'▼')+Math.abs(pctNum(tm26,tm25)).toFixed(1)+'%'):'N/A'} vs 2025 동기간</div></div>
+    <div class="kpi"><div class="label">2026 정산금액 (${periodLabel})</div><div class="value">${fmt(ts26)}</div></div>
   </div>
   <div class="panel"><h3><span class="icon" style="background:var(--accent2)"></span>매출 / 예상 RS 수수료 상세</h3>
     <div class="ov-filter">
@@ -295,6 +321,7 @@ yoy(){
     <button class="btn btn-primary" onclick="renderYoY()">분석</button>
     <input class="search" id="yoySearch" placeholder="캠핑장 검색..." oninput="renderYoY()">
   </div>
+  <div id="yoyPeriodNote" style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:13px;color:var(--accent)"></div>
   <div class="kpi-row" id="yoyKpi"></div>
   <div class="grid2">
     <div class="panel"><h3><span class="icon" style="background:var(--accent)"></span>변동률 분포</h3><div class="chart-wrap"><canvas id="yoyCh1"></canvas></div></div>
@@ -470,8 +497,13 @@ function renderYoY(){
   const cy=+document.getElementById('yoyCur').value,py=+document.getElementById('yoyPrev').value;
   const search=(document.getElementById('yoySearch').value||'').toLowerCase();
   let data=getYoYData(cy,py);
+  const period=data._period||[];
+  const pNote=document.getElementById('yoyPeriodNote');
+  if(pNote){
+    if(period.length&&period.length<12)pNote.innerHTML=`동일 기간 비교: <strong>${cy}년 ${period[0]}~${period[period.length-1]}월</strong> vs <strong>${py}년 ${period[0]}~${period[period.length-1]}월</strong> (${cy}년에 데이터가 있는 ${period.length}개월만 비교)`;
+    else pNote.innerHTML=`${cy}년 전체 vs ${py}년 전체 비교`;
+  }
   if(search)data=data.filter(r=>r.name.toLowerCase().includes(search));
-  // add sortable fields
   data.forEach(r=>{const c=r.camp||{};r.status=c.s||'';r.plan=c.p||''});
   const up=data.filter(r=>r.payChg!==null&&r.payChg>0).length;
   const dn=data.filter(r=>r.payChg!==null&&r.payChg<0).length;
