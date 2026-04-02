@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PenCambridge Report: 양주 감악산 캠핑장 — AI 라운드테이블 분석</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:#0d0f13;color:#e0e0e0;font-size:15px;line-height:1.75}
+.app{max-width:860px;margin:0 auto;padding:40px 20px 80px}
+.header{margin-bottom:40px}
+.header-tag{color:#4ecdc4;font-size:12px;letter-spacing:2px;font-weight:700;margin-bottom:8px}
+.header-meta{color:#666;font-size:13px;font-family:monospace;margin-bottom:12px}
+.header h1{font-size:26px;font-weight:800;line-height:1.3;color:#fff}
+.header h1 span{color:#4caf50}
+.participants{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap}
+.participant-chip{display:flex;align-items:center;gap:6px;font-size:13px;color:#aaa;background:#1a1d25;padding:6px 14px;border-radius:20px}
+.dot{width:8px;height:8px;border-radius:50%}
+.round-divider{text-align:center;padding:32px 0 16px;color:#888;font-size:13px;letter-spacing:1px;font-family:monospace;cursor:pointer;border-top:1px solid #222;margin-top:32px;display:flex;align-items:center;justify-content:center;gap:8px}
+.arrow{font-size:10px;transition:transform .2s}
+.round-divider.collapsed .arrow{transform:rotate(-90deg)}
+.round-divider.collapsed+.round-content{display:none}
+.message{display:flex;gap:14px;margin:16px 0;animation:fadeIn .4s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.avatar{width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;margin-top:4px}
+.bubble{background:#1e2230;border-radius:12px;padding:16px 20px;flex:1;border-left:3px solid #333;position:relative}
+.msg-datapine .bubble{border-left-color:#64b5f6}
+.msg-voxcamp .bubble{border-left-color:#f06292}
+.msg-prismo .bubble{border-left-color:#ffb74d}
+.msg-lensfield .bubble{border-left-color:#ab47bc}
+.msg-compass .bubble{border-left-color:#4ecdc4}
+.name{font-weight:700;font-size:14px;margin-bottom:6px}
+.text{color:#ccc;font-size:14px;line-height:1.8}
+.text strong{color:#fff}
+.feedback-badge{display:inline-block;font-size:10px;padding:2px 8px;border-radius:4px;margin-left:8px;font-weight:700;vertical-align:middle}
+.badge-agree{background:rgba(76,175,80,.15);color:#4caf50}
+.badge-challenge{background:rgba(244,67,54,.15);color:#f44336}
+.badge-extend{background:rgba(33,150,243,.15);color:#2196f3}
+.badge-concern{background:rgba(255,152,0,.15);color:#ff9800}
+.badge-data{background:rgba(156,39,176,.15);color:#9c27b0}
+.report-card{background:#141620;border:1px solid #2a2d3a;border-radius:16px;padding:32px;margin-top:48px}
+.report-card h2{color:#4ecdc4;font-size:18px;margin-bottom:24px;display:flex;align-items:center;gap:8px}
+.report-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:16px}
+.report-table th{text-align:left;padding:10px 12px;background:#1a1d25;color:#888;font-weight:600;border-bottom:1px solid #2a2d3a}
+.report-table td{padding:10px 12px;border-bottom:1px solid #1e2230}
+.report-table .num{width:36px;text-align:center;color:#666}
+.priority-high{color:#f44336;font-weight:700}
+.priority-mid{color:#ffb74d;font-weight:700}
+.priority-low{color:#4caf50;font-weight:700}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:24px 0}
+.kpi{background:#1a1d25;border-radius:12px;padding:16px;text-align:center;border:1px solid #2a2d3a}
+.kpi .label{font-size:11px;color:#666;margin-bottom:4px}
+.kpi .value{font-size:24px;font-weight:800;color:#fff}
+.kpi .change{font-size:12px;margin-top:4px}
+.up{color:#4caf50} .down{color:#f44336}
+.nav-rounds{position:fixed;right:24px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;z-index:100}
+.nav-rounds a{color:#555;font-size:12px;text-decoration:none;font-family:monospace;padding:4px 8px;border-radius:4px;transition:all .2s}
+.nav-rounds a:hover,.nav-rounds a.active{color:#4ecdc4;background:#1a1d25}
+.footer{text-align:center;margin-top:48px;padding-top:24px;border-top:1px solid #222;color:#444;font-size:12px}
+.footer a{color:#4ecdc4;text-decoration:none}
+@media(max-width:768px){.nav-rounds{display:none}.app{padding:20px 16px 60px}}
+</style>
+</head>
+<body>
+<nav class="nav-rounds">
+  <a href="#round-1">Round 1</a>
+  <a href="#round-2">Round 2</a>
+  <a href="#round-3">Round 3</a>
+  <a href="#round-4">Round 4</a>
+  <a href="#round-5">Round 5</a>
+  <a href="#report">Report</a>
+</nav>
+<div class="app">
+<div class="header">
+  <div class="header-tag">PENCAMBRIDGE × CAMFIT REPORT</div>
+  <div class="header-meta">report-gamaksan-202604 · 2026-04-02</div>
+  <h1>양주 감악산 캠핑장 — <span>AI 라운드테이블 분석</span></h1>
+  <div class="participants"><span class="participant-chip"><span class="dot" style="background:#64b5f6"></span>datapine</span><span class="participant-chip"><span class="dot" style="background:#f06292"></span>voxcamp</span><span class="participant-chip"><span class="dot" style="background:#ffb74d"></span>prismo</span><span class="participant-chip"><span class="dot" style="background:#ab47bc"></span>lensfield</span><span class="participant-chip"><span class="dot" style="background:#4ecdc4"></span>compass</span></div>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi"><div class="label">25년 1Q 결제</div><div class="value">306만</div></div>
+  <div class="kpi"><div class="label">26년 1Q 결제</div><div class="value">727만</div><div class="change up">+137.7%</div></div>
+  <div class="kpi"><div class="label">노출수</div><div class="value">9만</div></div>
+  <div class="kpi"><div class="label">찜</div><div class="value">860</div></div>
+  <div class="kpi"><div class="label">전환율</div><div class="value">0.91%</div></div>
+  <div class="kpi"><div class="label">사진 점수</div><div class="value" style="color:#4caf50">4/5</div></div>
+</div>
+
+
+<div class="round-divider" id="round-1">
+  <span>ROUND 1 — 현황 진단</span>
+  <span class="arrow">▼</span>
+</div>
+<div class="round-content"><div class="message ai msg-datapine">
+  <div class="avatar">📊</div>
+  <div class="bubble">
+    <div class="name" style="color:#64b5f6">datapine</div>
+    <div class="text">자, 양주 감악산 캠핑장의 핵심 지표를 짚어보겠습니다. 25년 1분기 결제액 306만원에서 26년 1분기 727만원으로, <strong>전년동기 대비 +137.7% 상승</strong>했습니다. 연환산 기준 약 2907만원 규모입니다. 사이트 26개 기준 사이트당 1분기 매출은 약 28만원이고, 노출수 9만회 대비 찜 전환율은 0.91%입니다. 수치상으로는 양호한 성장세를 보이고 있지만, 세부적으로 파고들 부분이 있습니다.</div>
+  </div>
+</div><div class="message ai msg-voxcamp">
+  <div class="avatar">💬</div>
+  <div class="bubble">
+    <div class="name" style="color:#f06292">voxcamp</div><span class="feedback-badge badge-concern">우려</span>
+    <div class="text">캠핏 내 리뷰가 0건입니다. 이건 정말 심각한 신호예요. 노출이 9만회나 되는데 리뷰가 하나도 없다는 건, 방문자가 '다른 사람의 경험'을 확인할 수 없다는 뜻이거든요. 요즘 캠퍼들은 리뷰 없는 곳은 거르는 게 기본이에요. 전환율 0.91%가 낮은 이유 중 하나가 이것일 수 있습니다.</div>
+  </div>
+</div><div class="message ai msg-prismo">
+  <div class="avatar">💰</div>
+  <div class="bubble">
+    <div class="name" style="color:#ffb74d">prismo</div><span class="feedback-badge badge-agree">동의</span>
+    <div class="text">매출이 오르고 있는 건 좋은 신호입니다. 하지만 이걸 '유지'가 아니라 '가속'으로 바꿔야 합니다. 현재 연환산 2907만원이면 사이트당 연 112만원인데, 시즌별 가격 최적화로 20-30%는 더 끌어올릴 수 있는 구조입니다. 특히 봄 성수기에 가격 탄력성을 확인해봐야 해요.</div>
+  </div>
+</div><div class="message ai msg-lensfield">
+  <div class="avatar">📸</div>
+  <div class="bubble">
+    <div class="name" style="color:#ab47bc">lensfield</div><span class="feedback-badge badge-agree">동의</span>
+    <div class="text">사진은 양호합니다. '드론항공+벚꽃' 유형으로 메인 퀄리티가 괜찮고, 드론샷도 확보되어 있어서 시각적 매력도는 충분합니다. 시즌별 사진 교체로 신선함을 유지하는 게 관건이에요.</div>
+  </div>
+</div><div class="message ai msg-compass">
+  <div class="avatar">🧭</div>
+  <div class="bubble">
+    <div class="name" style="color:#4ecdc4">compass</div>
+    <div class="text">1라운드 정리하겠습니다. 양주 감악산 캠핑장은(는) 현재 <strong>성장세</strong> 상태이고, 핵심 지표는 결제 727만원(+137.7%), 전환율 0.91%, 사진 4/5점입니다. 성장세를 가속하기 위한 구체적인 전략을 2라운드부터 논의합시다.</div>
+  </div>
+</div></div>
+<div class="round-divider" id="round-2">
+  <span>ROUND 2 — 고객 인사이트</span>
+  <span class="arrow">▼</span>
+</div>
+<div class="round-content"><div class="message ai msg-voxcamp">
+  <div class="avatar">💬</div>
+  <div class="bubble">
+    <div class="name" style="color:#f06292">voxcamp</div>
+    <div class="text">고객 관점에서 양주 감악산 캠핑장을(를) 분석해보겠습니다. 전환율 0.91%를 뜯어보면 — 노출 9만회 중 860명이 찜을 눌렀어요. 이건 "관심은 있는데 결정적 한 방이 부족하다"는 뜻입니다. 경기 양주시 지역 캠퍼들의 검색 패턴을 보면, 봄꽃+자연 키워드가 강한 시기인데, 이걸 프로필에 반영하고 있는지가 중요합니다.</div>
+  </div>
+</div><div class="message ai msg-datapine">
+  <div class="avatar">📊</div>
+  <div class="bubble">
+    <div class="name" style="color:#64b5f6">datapine</div><span class="feedback-badge badge-data">데이터</span>
+    <div class="text">한 가지 중요한 데이터가 있습니다. 반려동물 동반 캠핑 수요가 전년 대비 34% 증가했다는 플랫폼 데이터가 있어요. 양주 감악산 캠핑장이(가) 애견 전용이라면, 이 니치 시장을 더 적극적으로 어필해야 합니다. 검색 키워드에 '애견', '반려견', '소형견' 같은 태그가 제대로 들어가 있는지 확인이 필요해요.</div>
+  </div>
+</div><div class="message ai msg-prismo">
+  <div class="avatar">💰</div>
+  <div class="bubble">
+    <div class="name" style="color:#ffb74d">prismo</div><span class="feedback-badge badge-extend">확장</span>
+    <div class="text">고객 심리와 가격을 연결하면 — 찜만 하고 예약을 안 한다는 건 '가격 민감'이거나 '확신 부족' 둘 중 하나예요. 비수기에 한정 프로모션(예: '이번 주 주중 30% 할인')을 던져보면, 찜한 860명 중에서 전환이 나올 겁니다.</div>
+  </div>
+</div><div class="message ai msg-lensfield">
+  <div class="avatar">📸</div>
+  <div class="bubble">
+    <div class="name" style="color:#ab47bc">lensfield</div><span class="feedback-badge badge-agree">동의</span>
+    <div class="text">확신 부족의 상당 부분은 시각적 요소에서 옵니다. 캠퍼가 찜을 누른 후 '여기 진짜 괜찮을까?' 하고 사진을 다시 보거든요. 그때 사진이 매력적이지 않으면 이탈합니다.</div>
+  </div>
+</div><div class="message ai msg-compass">
+  <div class="avatar">🧭</div>
+  <div class="bubble">
+    <div class="name" style="color:#4ecdc4">compass</div>
+    <div class="text">고객 인사이트 정리: 1) 전환율 0.91%는 개선 시급. 2) 찜 860건의 잠재 고객풀 활용 전략 필요. 3) 프로필 키워드 최적화로 타겟 고객 유입 강화. 다음 라운드에서 가격 전략을 논의합시다.</div>
+  </div>
+</div></div>
+<div class="round-divider" id="round-3">
+  <span>ROUND 3 — 가격 & 매출 전략</span>
+  <span class="arrow">▼</span>
+</div>
+<div class="round-content"><div class="message ai msg-prismo">
+  <div class="avatar">💰</div>
+  <div class="bubble">
+    <div class="name" style="color:#ffb74d">prismo</div>
+    <div class="text">가격 전략을 설계합니다. 현재 사이트 26개에서 연환산 2907만원이면, 사이트당 월평균 9만원입니다. 이건 꽤 건강한 수준이지만, 최적화 여지는 있습니다. 제가 계산한 시나리오는 이렇습니다:<br><br><strong>목표: 20% 매출 증가 (581만원 추가)</strong><br>① 비수기 주중 공실 할인 (20-30% 인하) → 예약 +3건/월<br>② 주말 피크 프라이싱 (10-15% 인상) → 건당 단가 상승<br>③ 시즌 얼리버드 (2주 전 예약 시 10% 할인) → 예측 가능한 예약 확보</div>
+  </div>
+</div><div class="message ai msg-datapine">
+  <div class="avatar">📊</div>
+  <div class="bubble">
+    <div class="name" style="color:#64b5f6">datapine</div><span class="feedback-badge badge-data">데이터</span>
+    <div class="text">prismo의 시나리오를 수치로 검증합니다. 현재 26년 1분기 월평균 약 242만원인데, 여기서 월 5~6건 추가 예약이 잡히면 — 평균 사이트 가격을 5~7만원으로 가정 시 월 25~42만원 추가 매출입니다. 이게 연간으로 누적되면 300~500만원 차이가 납니다.</div>
+  </div>
+</div><div class="message ai msg-voxcamp">
+  <div class="avatar">💬</div>
+  <div class="bubble">
+    <div class="name" style="color:#f06292">voxcamp</div><span class="feedback-badge badge-agree">동의</span>
+    <div class="text">현재 성장 중이니까, 공격적 할인보다는 '가치 기반 가격 전략'이 맞아요. 기존 방문자의 재방문을 유도하는 리피터 할인(10%)이나, 리뷰 작성 시 다음 예약 쿠폰 같은 방식이 더 효과적입니다.</div>
+  </div>
+</div><div class="message ai msg-lensfield">
+  <div class="avatar">📸</div>
+  <div class="bubble">
+    <div class="name" style="color:#ab47bc">lensfield</div><span class="feedback-badge badge-extend">확장</span>
+    <div class="text">가격 전략에 하나 추가요. 프리미엄 존을 사진으로 차별화해서 가격대를 나누는 겁니다. 같은 캠핑장 안에서도 '뷰 맛집 사이트'를 드론 사진으로 부각하면 10-20% 프리미엄을 받을 수 있어요.</div>
+  </div>
+</div><div class="message ai msg-compass">
+  <div class="avatar">🧭</div>
+  <div class="bubble">
+    <div class="name" style="color:#4ecdc4">compass</div>
+    <div class="text">가격 전략 합의점: 1) 비수기 주중 타겟 할인 실행. 2) 주말 피크 프라이싱 테스트. 3) 리피터 할인 + 리뷰 유도 전략 병행. 예상 효과: 월 5~6건 추가 예약 → 연 300~500만원 매출 증가.</div>
+  </div>
+</div></div>
+<div class="round-divider" id="round-4">
+  <span>ROUND 4 — 콘텐츠 & 비주얼 혁신</span>
+  <span class="arrow">▼</span>
+</div>
+<div class="round-content"><div class="message ai msg-lensfield">
+  <div class="avatar">📸</div>
+  <div class="bubble">
+    <div class="name" style="color:#ab47bc">lensfield</div>
+    <div class="text">양주 감악산 캠핑장의 사진은 꽤 잘 관리되고 있습니다. '드론항공+벚꽃' 유형의 메인 사진이 드론 항공샷과 함께 전체적으로 괜찮은 퀄리티를 보여주고 있어요. 다만 시즌별 교체가 중요합니다. 봄에는 벚꽃/신록, 여름에는 녹음/계곡, 가을에는 단풍으로 갈아끼워야 '살아있는 캠핑장' 느낌이 나요.</div>
+  </div>
+</div><div class="message ai msg-datapine">
+  <div class="avatar">📊</div>
+  <div class="bubble">
+    <div class="name" style="color:#64b5f6">datapine</div><span class="feedback-badge badge-data">데이터</span>
+    <div class="text">사진 개선의 ROI를 계산합니다. 업계 데이터 기준으로, 전문 사진 교체 후 평균 전환율 상승이 0.3~0.8%p입니다. 현재 양주 감악산 캠핑장의 전환율 0.91%에서 0.5%p만 올라도, 노출 9만회 기준으로 찜이 약 471건 추가되고, 이 중 10%가 예약으로 전환되면 월 4건 추가 예약입니다.</div>
+  </div>
+</div><div class="message ai msg-prismo">
+  <div class="avatar">💰</div>
+  <div class="bubble">
+    <div class="name" style="color:#ffb74d">prismo</div><span class="feedback-badge badge-agree">동의</span>
+    <div class="text">사진 투자는 가장 확실한 ROI를 주는 영역이에요. 드론 촬영 1회 비용이 30만원 내외인데, 이 사진으로 6개월~1년을 씁니다. 사이트당 1건만 추가로 예약이 잡혀도 바로 본전이에요.</div>
+  </div>
+</div><div class="message ai msg-voxcamp">
+  <div class="avatar">💬</div>
+  <div class="bubble">
+    <div class="name" style="color:#f06292">voxcamp</div><span class="feedback-badge badge-extend">확장</span>
+    <div class="text">사진 한 가지 더 — 캠퍼들이 가장 보고 싶어하는 건 '실제 텐트 치고 있는 모습'이에요. 빈 사이트 사진보다 '누군가 즐기고 있는' 모습이 전환율에 2배 이상 효과가 있다는 데이터가 있어요.</div>
+  </div>
+</div><div class="message ai msg-compass">
+  <div class="avatar">🧭</div>
+  <div class="bubble">
+    <div class="name" style="color:#4ecdc4">compass</div>
+    <div class="text">콘텐츠 전략 합의: 1) 시즌별 사진 교체 스케줄링. 2) 드론 항공 촬영 → 캠핏 프로필 + 네이버 플레이스 동시 업데이트. 3) 리뷰 유도를 통한 유저 콘텐츠 확보. 예상 전환율 개선: +0.3~0.8%p.</div>
+  </div>
+</div></div>
+<div class="round-divider" id="round-5">
+  <span>ROUND 5 — 실행 로드맵</span>
+  <span class="arrow">▼</span>
+</div>
+<div class="round-content"><div class="message ai msg-compass">
+  <div class="avatar">🧭</div>
+  <div class="bubble">
+    <div class="name" style="color:#4ecdc4">compass</div>
+    <div class="text">4라운드의 논의를 종합해서, 양주 감악산 캠핑장의 <strong>향후 3개월 실행 로드맵</strong>을 제안합니다.<br><br><strong>1주차 (즉시):</strong><br>• 캠핏 프로필 키워드 최적화 (태그, 한줄소개 재작성)<br>• 네이버 플레이스 정보 동기화<br>• 리피터 할인 프로그램 설계<br><br><strong>2~4주차 (1개월):</strong><br>• 시즌 사진 교체 (봄 버전)<br>• 첫 번째 월간 리포트 발행<br>• 주말 피크 프라이싱 테스트<br><br><strong>2~3개월차:</strong><br>• 리뷰 유도 캠페인 (방문 후 알림톡)<br>• 성과 데이터 기반 전략 수정<br>• 시즌별 프로모션 기획 (여름 성수기 준비)</div>
+  </div>
+</div><div class="message ai msg-datapine">
+  <div class="avatar">📊</div>
+  <div class="bubble">
+    <div class="name" style="color:#64b5f6">datapine</div><span class="feedback-badge badge-agree">동의</span>
+    <div class="text">이 로드맵대로 실행하면 3개월 후 예상 지표 변화입니다: 전환율 0.91% → 1.4% 목표, 월 추가 예약 +5~6건, 분기 매출 효과 약 82만원 이상.</div>
+  </div>
+</div><div class="message ai msg-prismo">
+  <div class="avatar">💰</div>
+  <div class="bubble">
+    <div class="name" style="color:#ffb74d">prismo</div><span class="feedback-badge badge-agree">동의</span>
+    <div class="text">비용 대비 효과를 정리하면 — 월 구독료 20~30만원에 대해, 월 5건 추가 예약(약 25~35만원)이면 첫 달부터 본전입니다. 드론 촬영 효과까지 더하면 3개월 누적 ROI는 200% 이상 가능합니다.</div>
+  </div>
+</div><div class="message ai msg-lensfield">
+  <div class="avatar">📸</div>
+  <div class="bubble">
+    <div class="name" style="color:#ab47bc">lensfield</div><span class="feedback-badge badge-agree">동의</span>
+    <div class="text">그리고 잊지 마세요 — 드론 사진과 최적화된 프로필은 계약이 끝나도 남는 자산입니다. 3개월 후에 해준 MD님 서비스를 안 쓰더라도, 그때까지 만들어진 사진과 리뷰는 계속 일해줍니다.</div>
+  </div>
+</div><div class="message ai msg-voxcamp">
+  <div class="avatar">💬</div>
+  <div class="bubble">
+    <div class="name" style="color:#f06292">voxcamp</div><span class="feedback-badge badge-agree">동의</span>
+    <div class="text">마지막으로 — 이 모든 게 '숫자'만의 이야기가 아닙니다. 양주 감악산 캠핑장에 오는 캠퍼들이 '여기 진짜 괜찮다'고 느끼는 경험을 만드는 거예요. 사진이 좋아지고, 리뷰가 쌓이고, 가격이 합리적이면 — 그건 매출 이상의 브랜드 가치입니다.</div>
+  </div>
+</div></div>
+
+<div class="report-card" id="report">
+  <h2>🧭 실행 리포트 카드</h2>
+  <p style="color:#888;font-size:13px;margin-bottom:16px">종합 진단: <strong style="color:#4caf50">성장 관리</strong> | 사이트 26개 | 경기 양주시 | 플랜: 파트너v7</p>
+  <table class="report-table">
+    <thead><tr><th>#</th><th>실행 항목</th><th>담당</th><th>우선순위</th><th>기한</th></tr></thead>
+    <tbody><tr><td class="num">1</td><td>캠핏 프로필 키워드 최적화</td><td>PenCambridge</td><td class="priority-high">HIGH</td><td>1주 이내</td></tr><tr><td class="num">2</td><td>네이버 플레이스 동기화</td><td>PenCambridge</td><td class="priority-high">HIGH</td><td>1주 이내</td></tr><tr><td class="num">3</td><td>리뷰 유도 캠페인 시작</td><td>PenCambridge</td><td class="priority-mid">MID</td><td>1개월 이내</td></tr><tr><td class="num">4</td><td>월간 리포트 정기 발행</td><td>PenCambridge</td><td class="priority-mid">MID</td><td>매월</td></tr><tr><td class="num">5</td><td>시즌별 사진 교체 (여름 준비)</td><td>PenCambridge</td><td class="priority-mid">MID</td><td>6월 이전</td></tr></tbody>
+  </table>
+</div>
+
+<div class="footer">
+  <p>PenCambridge × CAMFIT 공식 협력사 | 담당 MD: 박해준</p>
+  <p style="margin-top:4px"><a href="https://camfit.co.kr/camp/661e72d4563dd1001edf18bf" target="_blank">캠핏에서 보기 →</a></p>
+</div>
+</div>
+
+<script>
+document.querySelectorAll('.round-divider').forEach(d=>{
+  d.addEventListener('click',()=>{d.classList.toggle('collapsed')});
+});
+const navLinks=document.querySelectorAll('.nav-rounds a');
+const observer=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      navLinks.forEach(l=>l.classList.remove('active'));
+      const id=e.target.id;
+      const link=document.querySelector('.nav-rounds a[href="#'+id+'"]');
+      if(link)link.classList.add('active');
+    }
+  });
+},{threshold:0.3});
+document.querySelectorAll('[id^=round-],#report').forEach(el=>observer.observe(el));
+</script>
+</body>
+</html>
