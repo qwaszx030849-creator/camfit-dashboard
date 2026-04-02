@@ -61,6 +61,15 @@ canvas{border-radius:8px}
 .camp-link:hover{text-decoration:underline}
 .msg-template{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin:8px 0;font-size:13px;line-height:1.6}
 .alert-card{background:linear-gradient(135deg,rgba(239,68,68,.1),rgba(239,68,68,.05));border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:16px;margin-bottom:12px}
+.btn-del{background:transparent;color:var(--red);border:1px solid rgba(239,68,68,.3);padding:3px 10px;border-radius:6px;cursor:pointer;font-size:11px;transition:all .2s}
+.btn-del:hover{background:rgba(239,68,68,.15)}
+.btn-restore{background:transparent;color:var(--orange);border:1px solid rgba(245,158,11,.3);padding:3px 10px;border-radius:6px;cursor:pointer;font-size:11px}
+.btn-restore:hover{background:rgba(245,158,11,.15)}
+.hidden-bar{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;font-size:13px}
+.ov-filter{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
+.ov-filter select{min-width:100px}
+.rs-table td,.rs-table th{text-align:right}
+.rs-table td:first-child,.rs-table th:first-child{text-align:left}
 </style>
 </head>
 <body>
@@ -98,16 +107,47 @@ const fmt=n=>{if(Math.abs(n)>=1e8)return(n/1e8).toFixed(1)+'억';if(Math.abs(n)>
 const fmtN=n=>n.toLocaleString();
 const pctNum=(a,b)=>b===0?null:((a-b)/b*100);
 
+// === 삭제(숨김) 관리 - localStorage 기반 ===
+const HIDDEN_KEY='camfit_hidden_camps';
+function getHidden(){try{return JSON.parse(localStorage.getItem(HIDDEN_KEY)||'[]')}catch(e){return[]}}
+function setHidden(arr){localStorage.setItem(HIDDEN_KEY,JSON.stringify(arr))}
+function hideCamp(name){const h=getHidden();if(!h.includes(name)){h.push(name);setHidden(h)}refreshAfterHide()}
+function restoreCamp(name){const h=getHidden().filter(n=>n!==name);setHidden(h);refreshAfterHide()}
+function restoreAll(){setHidden([]);refreshAfterHide()}
+function isHidden(name){return getHidden().includes(name)}
+function refreshAfterHide(){
+  const active=document.querySelector('.nav button.active');
+  if(active)renderTab(active.dataset.tab);
+  document.getElementById('totalCamps').textContent=D.camps.filter(c=>!isHidden(c.n)).length;
+}
+function hiddenBarHTML(){
+  const h=getHidden();
+  if(!h.length)return'';
+  return `<div class="hidden-bar"><span>숨김 처리된 업체: <strong>${h.length}개</strong></span><div><button class="btn-restore" onclick="showHiddenList()">숨김 목록 보기</button> <button class="btn-restore" onclick="restoreAll()" style="margin-left:6px">전체 복원</button></div></div>`;
+}
+window.showHiddenList=function(){
+  const h=getHidden();
+  const html=h.map(n=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span>${n}</span><button class="btn-restore" onclick="restoreCamp('${n.replace(/'/g,"\\'")}')">복원</button></div>`).join('');
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999';
+  modal.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:500px;width:90%;max-height:70vh;overflow-y:auto"><h3 style="margin-bottom:16px">숨김 처리된 업체 (${h.length}개)</h3>${html}<div style="margin-top:16px;text-align:right"><button class="btn btn-primary" onclick="this.closest('div[style*=fixed]').remove()">닫기</button></div></div>`;
+  document.body.appendChild(modal);
+};
+
 let charts={};
 function destroyCharts(){Object.values(charts).forEach(c=>{try{c.destroy()}catch(e){}});charts={}}
 
 const campMap={};
 D.camps.forEach(c=>{campMap[c.n]=c});
 
-function yearlyBycamp(year){return D.yearly.filter(r=>r.y===year)}
-function monthlyBycamp(year,month){return D.monthly.filter(r=>r.y===year&&r.m===month)}
-function monthlyByCampName(name){return D.monthly.filter(r=>r.n===name).sort((a,b)=>a.y===b.y?a.m-b.m:a.y-b.y)}
+// 숨김 필터 적용 헬퍼
+function activeCamps(){return D.camps.filter(c=>!isHidden(c.n))}
+function yearlyBycamp(year){return D.yearly.filter(r=>r.y===year&&!isHidden(r.n))}
+function monthlyBycamp(year,month){return D.monthly.filter(r=>r.y===year&&r.m===month&&!isHidden(r.n))}
+function monthlyByCampName(name){return D.monthly.filter(r=>r.n===name&&!isHidden(r.n)).sort((a,b)=>a.y===b.y?a.m-b.m:a.y-b.y)}
 function sumField(arr,f){return arr.reduce((s,r)=>s+(r[f]||0),0)}
+function activeMonthly(){return D.monthly.filter(r=>!isHidden(r.n))}
+function activeYearly(){return D.yearly.filter(r=>!isHidden(r.n))}
 
 function getYoYData(cy,py){
   const cur=yearlyBycamp(cy),prev=yearlyBycamp(py),pm={};
@@ -144,7 +184,8 @@ function getMoMData(year,month){
 
 const tabs={
 overview(){
-  const ac=D.camps.filter(c=>c.s==='운영중').length;
+  const camps=activeCamps();
+  const ac=camps.filter(c=>c.s==='운영중').length;
   const y26=yearlyBycamp(2026),y25=yearlyBycamp(2025);
   const tp26=sumField(y26,'pay'),tp25=sumField(y25,'pay');
   const tc26=sumField(y26,'cnt');
@@ -155,17 +196,32 @@ overview(){
   const yoy=getYoYData(2026,2025);
   const ranked=yoy.filter(r=>r.prevPay>0).sort((a,b)=>(b.payChg||0)-(a.payChg||0));
   const top5=ranked.slice(0,5),bot5=ranked.slice(-5).reverse();
+  // 월 옵션 생성
+  const availYears=[...new Set(activeMonthly().map(r=>r.y))].sort((a,b)=>b-a);
+  const yearOpts=availYears.map(y=>`<option value="${y}" ${y===2026?'selected':''}>${y}년</option>`).join('');
   return `
+  ${hiddenBarHTML()}
   <div class="kpi-row">
-    <div class="kpi"><div class="label">총 담당 거래처</div><div class="value">${D.camps.length}개</div><div class="change"><span class="tag tag-green">${ac}개 운영중</span></div></div>
+    <div class="kpi"><div class="label">총 담당 거래처</div><div class="value">${camps.length}개</div><div class="change"><span class="tag tag-green">${ac}개 운영중</span></div></div>
     <div class="kpi"><div class="label">2026 총 결제금액 (1~3월)</div><div class="value">${fmt(tp26)}</div><div class="change ${pc>0?'up':'down'}">${pc!==null?(pc>0?'▲':'▼')+Math.abs(pc).toFixed(1)+'% vs 2025 전체':'N/A'}</div></div>
     <div class="kpi"><div class="label">2026 정산건수</div><div class="value">${fmtN(tc26)}건</div></div>
-    <div class="kpi"><div class="label">2026 MD 수수료</div><div class="value">${fmt(tm26)}</div><div class="change ${tm26>tm25?'up':'down'}">${tm25>0?((pctNum(tm26,tm25)>0?'▲':'▼')+Math.abs(pctNum(tm26,tm25)).toFixed(1)+'%'):'N/A'} vs 2025</div></div>
+    <div class="kpi"><div class="label">2026 MD 수수료(RS)</div><div class="value">${fmt(tm26)}</div><div class="change ${tm26>tm25?'up':'down'}">${tm25>0?((pctNum(tm26,tm25)>0?'▲':'▼')+Math.abs(pctNum(tm26,tm25)).toFixed(1)+'%'):'N/A'} vs 2025</div></div>
     <div class="kpi"><div class="label">2026 정산금액</div><div class="value">${fmt(ts26)}</div></div>
+  </div>
+  <div class="panel"><h3><span class="icon" style="background:var(--accent2)"></span>매출 / 예상 RS 수수료 상세</h3>
+    <div class="ov-filter">
+      <label>연도:</label><select id="ovYear" onchange="renderOvRS()">${yearOpts}</select>
+      <label>월:</label><select id="ovMonth" onchange="renderOvRS()"><option value="all" selected>전체(누적)</option><option value="1">1월</option><option value="2">2월</option><option value="3">3월</option><option value="4">4월</option><option value="5">5월</option><option value="6">6월</option><option value="7">7월</option><option value="8">8월</option><option value="9">9월</option><option value="10">10월</option><option value="11">11월</option><option value="12">12월</option></select>
+      <input class="search" id="ovSearch" placeholder="캠핑장 검색..." oninput="renderOvRS()" style="width:220px">
+    </div>
+    <div class="kpi-row" id="ovKpi"></div>
+    <div class="scroll-table rs-table" style="max-height:400px"><table id="ovTable"><thead><tr>
+      <th style="text-align:left">캠핑장</th><th>결제금액</th><th>정산건수</th><th>환불금액</th><th>기본수수료</th><th>플랜수수료</th><th>PG수수료</th><th>파트너수수료</th><th>MD수수료(RS)</th><th>정산지급금액</th>
+    </tr></thead><tbody></tbody></table></div>
   </div>
   <div class="grid2">
     <div class="panel"><h3><span class="icon" style="background:var(--accent)"></span>월별 결제금액 추이 (내 거래처)</h3><div class="chart-wrap"><canvas id="ch1"></canvas></div></div>
-    <div class="panel"><h3><span class="icon" style="background:var(--green)"></span>월별 MD 수수료 추이</h3><div class="chart-wrap"><canvas id="ch2"></canvas></div></div>
+    <div class="panel"><h3><span class="icon" style="background:var(--green)"></span>월별 MD 수수료(RS) 추이</h3><div class="chart-wrap"><canvas id="ch2"></canvas></div></div>
   </div>
   <div class="grid2">
     <div class="panel"><h3><span class="icon" style="background:var(--green)"></span>전년대비 매출 TOP 5 (성장)</h3>
@@ -274,14 +330,17 @@ market(){
 
 camps(){
   return `
+  ${hiddenBarHTML()}
   <div class="filter-row">
     <input class="search" id="campSearch" placeholder="캠핑장명, 주소, 플랜 검색..." oninput="renderCampList()" style="width:400px">
     <select id="campStatus" onchange="renderCampList()"><option value="">전체 상태</option><option value="운영중">운영중</option><option value="미운영">미운영</option></select>
     <select id="campPlan" onchange="renderCampList()"><option value="">전체 플랜</option></select>
     <span style="color:var(--text2);font-size:13px" id="campCount"></span>
+    <button class="btn btn-orange" onclick="hideAllInactive()" style="margin-left:auto">미운영 일괄 숨김</button>
+    <button class="btn" onclick="hideAllChurned()" style="background:var(--red);color:#fff">이탈 일괄 숨김</button>
   </div>
   <div class="scroll-table" style="max-height:700px"><table id="campTable"><thead><tr>
-    <th>캠핑장명</th><th>운영상태</th><th>등록상태</th><th>플랜</th><th>MD플랜</th><th>지역</th><th>사이트수</th><th>리뷰</th><th>노출수</th><th>찜</th><th>업체종목</th><th>링크</th>
+    <th>캠핑장명</th><th>운영상태</th><th>등록상태</th><th>플랜</th><th>MD플랜</th><th>지역</th><th>사이트수</th><th>리뷰</th><th>노출수</th><th>찜</th><th>업체종목</th><th>링크</th><th>관리</th>
   </tr></thead><tbody></tbody></table></div>`;
 }
 };
@@ -312,18 +371,53 @@ Chart.defaults.borderColor='#334155';
 
 function renderOverviewCharts(){
   const agg={};
-  D.monthly.filter(r=>r.y>=2024).forEach(r=>{
+  activeMonthly().filter(r=>r.y>=2024).forEach(r=>{
     const k=r.y+'-'+(r.m<10?'0'+r.m:r.m);
     if(!agg[k])agg[k]={pay:0,md:0};
     agg[k].pay+=r.pay;agg[k].md+=r.fmd+r.rmd+r.hmd;
   });
   const keys=Object.keys(agg).sort();
   charts.ch1=new Chart(document.getElementById('ch1'),{type:'bar',data:{labels:keys,datasets:[{label:'결제금액',data:keys.map(k=>agg[k].pay),backgroundColor:'rgba(59,130,246,.6)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fmt(v)}}}}});
-  charts.ch2=new Chart(document.getElementById('ch2'),{type:'line',data:{labels:keys,datasets:[{label:'MD수수료',data:keys.map(k=>agg[k].md),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.1)',fill:true,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fmt(v)}}}}});
-  const pc={};D.camps.forEach(c=>{const p=c.p||'미설정';pc[p]=(pc[p]||0)+1});
+  charts.ch2=new Chart(document.getElementById('ch2'),{type:'line',data:{labels:keys,datasets:[{label:'MD수수료(RS)',data:keys.map(k=>agg[k].md),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.1)',fill:true,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>fmt(v)}}}}});
+  const camps=activeCamps();
+  const pc={};camps.forEach(c=>{const p=c.p||'미설정';pc[p]=(pc[p]||0)+1});
   const pk=Object.keys(pc).sort((a,b)=>pc[b]-pc[a]).slice(0,10);
   charts.ch3=new Chart(document.getElementById('ch3'),{type:'doughnut',data:{labels:pk,datasets:[{data:pk.map(k=>pc[k]),backgroundColor:['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right'}}}});
+  renderOvRS();
 }
+
+// 종합현황 매출/RS 필터 테이블
+window.renderOvRS=function(){
+  const year=+document.getElementById('ovYear').value;
+  const monthVal=document.getElementById('ovMonth').value;
+  const search=(document.getElementById('ovSearch').value||'').toLowerCase();
+  let rows;
+  if(monthVal==='all'){
+    // 연간 누적: yearly 데이터 사용
+    rows=activeYearly().filter(r=>r.y===year);
+    rows=rows.map(r=>({n:r.n,pay:r.pay,cnt:r.cnt,ref:r.ref,bf:r.bf,pf:r.pf,pg:r.pg,ptn:r.ptn,md:r.fmd+r.rmd+r.hmd,set:r.set}));
+  }else{
+    const month=+monthVal;
+    const md=activeMonthly().filter(r=>r.y===year&&r.m===month);
+    rows=md.map(r=>({n:r.n,pay:r.pay,cnt:r.cnt,ref:r.ref,bf:r.bf,pf:r.pf,pg:r.pg,ptn:r.ptn,md:r.fmd+r.rmd+r.hmd,set:r.set}));
+  }
+  if(search)rows=rows.filter(r=>r.n.toLowerCase().includes(search));
+  rows.sort((a,b)=>b.pay-a.pay);
+  const tPay=rows.reduce((s,r)=>s+r.pay,0);
+  const tMd=rows.reduce((s,r)=>s+r.md,0);
+  const tCnt=rows.reduce((s,r)=>s+r.cnt,0);
+  const tSet=rows.reduce((s,r)=>s+r.set,0);
+  const label=monthVal==='all'?year+'년 누적':year+'년 '+monthVal+'월';
+  document.getElementById('ovKpi').innerHTML=`
+    <div class="kpi"><div class="label">${label} 결제금액</div><div class="value">${fmt(tPay)}</div></div>
+    <div class="kpi"><div class="label">${label} RS 수수료</div><div class="value" style="color:var(--green)">${fmt(tMd)}</div></div>
+    <div class="kpi"><div class="label">${label} 정산건수</div><div class="value">${fmtN(tCnt)}건</div></div>
+    <div class="kpi"><div class="label">${label} 정산금액</div><div class="value">${fmt(tSet)}</div></div>`;
+  const tbody=document.querySelector('#ovTable tbody');
+  tbody.innerHTML=rows.map(r=>`<tr><td style="text-align:left"><strong>${r.n}</strong></td><td>${fmt(r.pay)}</td><td>${fmtN(r.cnt)}</td><td>${fmt(r.ref)}</td><td>${fmt(r.bf)}</td><td>${fmt(r.pf)}</td><td>${fmt(r.pg)}</td><td>${fmt(r.ptn)}</td><td style="color:var(--green);font-weight:700">${fmt(r.md)}</td><td>${fmt(r.set)}</td></tr>`).join('');
+  // 합계 행
+  tbody.innerHTML+=`<tr style="background:var(--card2);font-weight:700"><td style="text-align:left">합계 (${rows.length}개소)</td><td>${fmt(tPay)}</td><td>${fmtN(tCnt)}</td><td>${fmt(rows.reduce((s,r)=>s+r.ref,0))}</td><td>${fmt(rows.reduce((s,r)=>s+r.bf,0))}</td><td>${fmt(rows.reduce((s,r)=>s+r.pf,0))}</td><td>${fmt(rows.reduce((s,r)=>s+r.pg,0))}</td><td>${fmt(rows.reduce((s,r)=>s+r.ptn,0))}</td><td style="color:var(--green)">${fmt(tMd)}</td><td>${fmt(tSet)}</td></tr>`;
+};
 
 function renderYoY(){
   const cy=+document.getElementById('yoyCur').value,py=+document.getElementById('yoyPrev').value;
@@ -498,18 +592,37 @@ function renderCampList(){
   const search=(document.getElementById('campSearch').value||'').toLowerCase();
   const status=document.getElementById('campStatus').value;
   const plan=document.getElementById('campPlan').value;
-  let data=D.camps;
+  let data=activeCamps();
   if(search)data=data.filter(c=>(c.n+c.a+c.p).toLowerCase().includes(search));
   if(status)data=data.filter(c=>c.s===status);
   if(plan)data=data.filter(c=>c.p===plan);
   document.getElementById('campCount').textContent=`${data.length}개 거래처`;
   document.querySelector('#campTable tbody').innerHTML=data.map(c=>{
     const region=(c.a||'').split(' ').slice(0,2).join(' ');
-    return `<tr><td><strong>${c.n}</strong></td><td><span class="tag ${c.s==='운영중'?'tag-green':'tag-orange'}">${c.s}</span></td><td><span class="tag ${c.r==='등록완료'?'tag-green':'tag-orange'}">${c.r}</span></td><td>${c.p||'-'}</td><td><span class="tag tag-purple">${c.mp||'-'}</span></td><td>${region}</td><td>${c.z||0}</td><td>${c.rv||0}</td><td>${c.ex||0}</td><td>${c.fv||0}</td><td>${c.bt||'-'}</td><td>${c.l?'<a class="camp-link" href="'+c.l+'" target="_blank">보기</a>':'-'}</td></tr>`;
+    const esc=c.n.replace(/'/g,"\\'");
+    return `<tr><td><strong>${c.n}</strong></td><td><span class="tag ${c.s==='운영중'?'tag-green':'tag-orange'}">${c.s}</span></td><td><span class="tag ${c.r==='등록완료'?'tag-green':'tag-orange'}">${c.r}</span></td><td>${c.p||'-'}</td><td><span class="tag tag-purple">${c.mp||'-'}</span></td><td>${region}</td><td>${c.z||0}</td><td>${c.rv||0}</td><td>${c.ex||0}</td><td>${c.fv||0}</td><td>${c.bt||'-'}</td><td>${c.l?'<a class="camp-link" href="'+c.l+'" target="_blank">보기</a>':'-'}</td><td><button class="btn-del" onclick="if(confirm('${esc} 을(를) 숨김 처리하시겠습니까?'))hideCamp('${esc}')">삭제</button></td></tr>`;
   }).join('');
 }
+// 미운영/이탈 일괄 숨김
+window.hideAllInactive=function(){
+  const inactive=activeCamps().filter(c=>c.s==='미운영');
+  if(!inactive.length)return alert('미운영 업체가 없습니다.');
+  if(!confirm(inactive.length+'개 미운영 업체를 일괄 숨김 처리하시겠습니까?'))return;
+  const h=getHidden();
+  inactive.forEach(c=>{if(!h.includes(c.n))h.push(c.n)});
+  setHidden(h);refreshAfterHide();
+};
+window.hideAllChurned=function(){
+  const y26names=new Set(yearlyBycamp(2026).map(r=>r.n));
+  const churned=activeCamps().filter(c=>c.s==='운영중'&&!y26names.has(c.n));
+  if(!churned.length)return alert('이탈 업체가 없습니다.');
+  if(!confirm(churned.length+'개 이탈(2026 거래없음) 업체를 일괄 숨김 처리하시겠습니까?'))return;
+  const h=getHidden();
+  churned.forEach(c=>{if(!h.includes(c.n))h.push(c.n)});
+  setHidden(h);refreshAfterHide();
+};
 
-document.getElementById('totalCamps').textContent=D.camps.length;
+document.getElementById('totalCamps').textContent=activeCamps().length;
 renderTab('overview');
 </script>
 </body>
