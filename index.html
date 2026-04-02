@@ -819,11 +819,11 @@ function renderMktTarget(){
 
 // === 리포트 생성기 탭 ===
 const REPORT_BOTS=[
-  {id:'datapine',emoji:'📊',color:'#64b5f6',role:'매출 분석'},
-  {id:'voxcamp',emoji:'💬',color:'#f06292',role:'컨셉/리뷰'},
-  {id:'prismo',emoji:'💰',color:'#ffb74d',role:'가격 전략'},
-  {id:'lensfield',emoji:'📸',color:'#ab47bc',role:'사진/콘텐츠'},
-  {id:'compass',emoji:'🧭',color:'#4ecdc4',role:'실행 총괄'},
+  {id:'datapine',emoji:'📊',color:'#64b5f6',role:'매출 분석',label:'AI 데이터분석관'},
+  {id:'voxcamp',emoji:'💬',color:'#f06292',role:'컨셉/리뷰',label:'AI 마케터'},
+  {id:'prismo',emoji:'💰',color:'#ffb74d',role:'가격 전략',label:'AI 전략기획'},
+  {id:'lensfield',emoji:'📸',color:'#ab47bc',role:'사진/콘텐츠',label:'AI 사진분석'},
+  {id:'compass',emoji:'🧭',color:'#4ecdc4',role:'실행 총괄',label:'AI 실행매니저'},
 ];
 
 tabs.reportGen=function(){
@@ -897,7 +897,7 @@ function buildReportHTML(c){
     const b=REPORT_BOTS.find(x=>x.id===bot);
     const bl={agree:'동의',challenge:'반론',extend:'확장',concern:'주의',data:'데이터'};
     const bdg=badge?`<span class="badge badge-${badge}">${bl[badge]||''}</span>`:'';
-    return `<div class="msg msg-${bot}"><div class="av">${b.emoji}</div><div class="bbl"><div class="nm" style="color:${b.color}">${b.id}${bdg}</div><div class="tx">${text}</div></div></div>`;
+    return `<div class="msg msg-${bot}"><div class="av">${b.emoji}</div><div class="bbl"><div class="nm" style="color:${b.color}">${b.label}${bdg}</div><div class="tx">${text}</div></div></div>`;
   }
 
   // R1: 매출
@@ -959,7 +959,7 @@ function buildReportHTML(c){
   acts.push({n:acts.length+1,t:'시즌 사진 교체 (여름 준비)',w:'PenCambridge',p:'mid',d:'6월 전'});
   const arows=acts.map(a=>`<tr><td style="text-align:center;color:#444">${a.n}</td><td>${a.t}</td><td>${a.w}</td><td class="${a.p==='high'?'down':'up'}" style="font-weight:700">${a.p.toUpperCase()}</td><td>${a.d}</td></tr>`).join('');
 
-  const chips=REPORT_BOTS.map(b=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#888;background:#15171e;padding:5px 12px;border-radius:16px"><span style="width:7px;height:7px;border-radius:50%;background:${b.color}"></span>${b.id}<span style="color:#555;margin-left:2px">${b.role}</span></span>`).join(' ');
+  const chips=REPORT_BOTS.map(b=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#888;background:#15171e;padding:5px 12px;border-radius:16px"><span style="width:7px;height:7px;border-radius:50%;background:${b.color}"></span>${b.label}<span style="color:#555;margin-left:2px">${b.role}</span></span>`).join(' ');
 
   const rounds=[
     {n:1,t:'매출 현황',h:r1},{n:2,t:'컨셉 & 리뷰',h:r2},
