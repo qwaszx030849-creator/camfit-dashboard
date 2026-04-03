@@ -93,6 +93,7 @@ th.sortable .arr-up,th.sortable .arr-down{display:block}
   <button data-tab="message">개인화 메시지</button>
   <button data-tab="mktTarget">마케팅 타겟</button>
   <button data-tab="reportGen">리포트 생성</button>
+  <button data-tab="clientMgmt">고객 관리</button>
   <button data-tab="market">시장 동향</button>
   <button data-tab="camps">거래처 목록</button>
 </div>
@@ -470,6 +471,7 @@ function renderTab(name){
   if(name==='message')renderMessages();
   if(name==='mktTarget')renderMktTarget();
   if(name==='reportGen')initReportGen();
+  if(name==='clientMgmt')renderClientMgmt();
   if(name==='market')renderMarketCharts();
   if(name==='camps')initCampList();
 }
@@ -1238,6 +1240,171 @@ window.generateReport=function(){
   }
   nextStep();
 };
+
+// === 활성 고객 관리 ===
+const CM_KEY='camfit_clients';
+function cmLoad(){try{return JSON.parse(localStorage.getItem(CM_KEY)||'[]')}catch(e){return[]}}
+function cmSave(arr){localStorage.setItem(CM_KEY,JSON.stringify(arr))}
+
+tabs.clientMgmt=function(){
+  const clients=cmLoad();
+  const allNames=[...new Set(D.monthly.map(r=>r.n))].sort((a,b)=>a.localeCompare(b,'ko'));
+  return `
+  <div class="panel" style="background:linear-gradient(135deg,rgba(16,185,129,.08),rgba(16,185,129,.03));border-color:rgba(16,185,129,.3)">
+    <h3><span class="icon" style="background:var(--green)"></span>활성 고객 관리</h3>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:12px">계약 중인 고객의 서비스 이행 현황을 관리합니다. (계약서 제3조 기반)</p>
+    <div class="filter-row">
+      <div style="position:relative"><input id="cmNewName" class="search" style="width:300px" placeholder="새 고객 캠핑장명 입력..." autocomplete="off" oninput="cmAutoComplete()"><div id="cmAC" style="position:absolute;top:100%;left:0;width:300px;max-height:200px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;display:none;z-index:50"></div></div>
+      <select id="cmNewTier"><option value="light">Light (월22만)</option><option value="standard">Standard (월33만)</option></select>
+      <button class="btn btn-green" onclick="cmAddClient()">고객 추가</button>
+    </div>
+  </div>
+  <div class="kpi-row" id="cmKpi"></div>
+  <div id="cmList"></div>`;
+};
+
+window.cmAutoComplete=function(){
+  const input=document.getElementById('cmNewName');
+  const ac=document.getElementById('cmAC');
+  const q=input.value.trim().toLowerCase();
+  if(!q){ac.style.display='none';return;}
+  const allNames=[...new Set(D.monthly.map(r=>r.n))].sort((a,b)=>a.localeCompare(b,'ko'));
+  const matches=allNames.filter(n=>n.toLowerCase().includes(q)).slice(0,10);
+  if(!matches.length){ac.style.display='none';return;}
+  ac.innerHTML=matches.map(n=>'<div style="padding:8px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);color:var(--text)" onmouseover="this.style.background=\'var(--card2)\'" onmouseout="this.style.background=\'\'" onclick="document.getElementById(\'cmNewName\').value=\''+n.replace(/'/g,"\\'")+'\';document.getElementById(\'cmAC\').style.display=\'none\'">'+n+'</div>').join('');
+  ac.style.display='block';
+};
+
+window.cmAddClient=function(){
+  const name=document.getElementById('cmNewName').value.trim();
+  if(!name)return alert('캠핑장명을 입력해주세요.');
+  const tier=document.getElementById('cmNewTier').value;
+  const clients=cmLoad();
+  if(clients.find(c=>c.name===name))return alert('이미 등록된 고객입니다.');
+  const camp=campMap[name]||{};
+  clients.push({
+    name, tier,
+    contractDate:new Date().toISOString().split('T')[0],
+    region:(camp.a||'').split(' ').slice(0,2).join(' '),
+    sites:camp.z||0,
+    plan:camp.p||'',
+    tasks:{profileOpt:false,naverSync:false,droneShoot:false,descRewrite:false,promo:false,reportSent:false,pricingRoutine:false,seasonPhoto:false},
+    notes:[],
+    reportHistory:[]
+  });
+  cmSave(clients);
+  document.getElementById('cmNewName').value='';
+  renderClientMgmt();
+};
+
+window.cmRemoveClient=function(name){
+  if(!confirm(name+' 고객을 삭제하시겠습니까?'))return;
+  const clients=cmLoad().filter(c=>c.name!==name);
+  cmSave(clients);
+  renderClientMgmt();
+};
+
+window.cmToggleTask=function(name,task){
+  const clients=cmLoad();
+  const cl=clients.find(c=>c.name===name);
+  if(cl){cl.tasks[task]=!cl.tasks[task];cmSave(clients);renderClientMgmt();}
+};
+
+window.cmAddNote=function(name){
+  const input=document.getElementById('cmNote_'+CSS.escape(name));
+  if(!input||!input.value.trim())return;
+  const clients=cmLoad();
+  const cl=clients.find(c=>c.name===name);
+  if(cl){cl.notes.unshift({date:new Date().toISOString().split('T')[0],text:input.value.trim()});cmSave(clients);input.value='';renderClientMgmt();}
+};
+
+window.cmChangeTier=function(name,tier){
+  const clients=cmLoad();
+  const cl=clients.find(c=>c.name===name);
+  if(cl){cl.tier=tier;cmSave(clients);renderClientMgmt();}
+};
+
+window.cmResetTasks=function(name){
+  const clients=cmLoad();
+  const cl=clients.find(c=>c.name===name);
+  if(cl){Object.keys(cl.tasks).forEach(k=>cl.tasks[k]=false);cmSave(clients);renderClientMgmt();}
+};
+
+function renderClientMgmt(){
+  const clients=cmLoad();
+  // KPI
+  const total=clients.length;
+  const lightC=clients.filter(c=>c.tier==='light').length;
+  const stdC=clients.filter(c=>c.tier==='standard').length;
+  const monthlyRev=lightC*220000+stdC*330000;
+  const avgProgress=total>0?Math.round(clients.reduce((s,c)=>{const t=c.tasks;const done=Object.values(t).filter(Boolean).length;return s+done/Object.keys(t).length*100},0)/total):0;
+
+  document.getElementById('cmKpi').innerHTML=`
+    <div class="kpi"><div class="label">활성 고객</div><div class="value">${total}개</div><div class="change"><span class="tag tag-green">${lightC} Light</span> <span class="tag tag-purple">${stdC} Std</span></div></div>
+    <div class="kpi"><div class="label">월 예상 매출</div><div class="value" style="color:var(--green)">${fmt(monthlyRev)}</div></div>
+    <div class="kpi"><div class="label">연 예상 매출</div><div class="value">${fmt(monthlyRev*12)}</div></div>
+    <div class="kpi"><div class="label">평균 서비스 진행률</div><div class="value">${avgProgress}%</div></div>`;
+
+  const TASK_LABELS={profileOpt:'프로필 최적화',naverSync:'네이버 동기화',droneShoot:'드론 촬영',descRewrite:'상세설명 리뉴얼',promo:'프로모션 실행',reportSent:'월간 리포트 발송',pricingRoutine:'가격 조정 루틴',seasonPhoto:'시즌 사진 교체'};
+  const LIGHT_TASKS=['profileOpt','naverSync','descRewrite','promo','reportSent','seasonPhoto'];
+  const STD_TASKS=['profileOpt','naverSync','droneShoot','descRewrite','promo','reportSent','pricingRoutine','seasonPhoto'];
+
+  let html='';
+  clients.forEach(cl=>{
+    const taskKeys=cl.tier==='standard'?STD_TASKS:LIGHT_TASKS;
+    const done=taskKeys.filter(k=>cl.tasks[k]).length;
+    const pct=Math.round(done/taskKeys.length*100);
+    const tierBadge=cl.tier==='standard'?'<span class="tag tag-purple">Standard</span>':'<span class="tag tag-green">Light</span>';
+    const esc=cl.name.replace(/'/g,"\\'");
+
+    // 매출 데이터 가져오기
+    const m26=D.monthly.filter(r=>r.n===cl.name&&r.y===2026&&[1,2,3].includes(r.m)).reduce((s,r)=>s+r.pay,0);
+    const m25=D.monthly.filter(r=>r.n===cl.name&&r.y===2025&&[1,2,3].includes(r.m)).reduce((s,r)=>s+r.pay,0);
+    const chg=m25>0?Math.round((m26-m25)/m25*1000)/10:0;
+
+    let tasksHtml=taskKeys.map(k=>{
+      const checked=cl.tasks[k]?'checked':'';
+      const style=cl.tasks[k]?'text-decoration:line-through;color:var(--text2)':'';
+      return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:3px 0;'+style+'"><input type="checkbox" '+checked+' onchange="cmToggleTask(\''+esc+"','"+k+'\')">'+TASK_LABELS[k]+'</label>';
+    }).join('');
+
+    let notesHtml=(cl.notes||[]).slice(0,3).map(n=>'<div style="font-size:11px;color:var(--text2);padding:2px 0;border-bottom:1px solid var(--border)"><span style="color:var(--accent);margin-right:6px">'+n.date+'</span>'+n.text+'</div>').join('');
+
+    html+=`<div class="panel" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div><strong style="font-size:15px">${cl.name}</strong> ${tierBadge} <span style="color:var(--text2);font-size:12px;margin-left:8px">${cl.region} · ${cl.sites}개 사이트 · 계약 ${cl.contractDate}</span></div>
+        <div style="display:flex;gap:6px">
+          <select style="font-size:11px;padding:2px 6px" onchange="cmChangeTier('${esc}',this.value)"><option value="light" ${cl.tier==='light'?'selected':''}>Light</option><option value="standard" ${cl.tier==='standard'?'selected':''}>Standard</option></select>
+          <button class="btn-del" onclick="cmRemoveClient('${esc}')">삭제</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:16px;margin-bottom:12px;font-size:12px">
+        <span>26Q1: <strong>${fmt(m26)}</strong></span>
+        <span class="${chg>0?'up':'down'}">${chg>0?'▲':'▼'}${Math.abs(chg)}% vs 25Q1</span>
+        <span>월비용: <strong>${cl.tier==='standard'?'33만':'22만'}</strong></span>
+      </div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-size:12px;color:var(--text2)">서비스 체크리스트 (${done}/${taskKeys.length})</span>
+            <button style="font-size:10px;background:none;border:1px solid var(--border);color:var(--text2);padding:1px 8px;border-radius:4px;cursor:pointer" onclick="cmResetTasks('${esc}')">초기화</button>
+          </div>
+          <div style="background:var(--card2);border-radius:6px;height:4px;margin-bottom:8px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${pct===100?'var(--green)':'var(--accent)'};border-radius:6px"></div></div>
+          ${tasksHtml}
+        </div>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px">활동 메모</div>
+          <div style="display:flex;gap:4px;margin-bottom:8px"><input id="cmNote_${CSS.escape(cl.name)}" class="search" style="flex:1;font-size:12px;padding:6px 10px" placeholder="메모 입력..." onkeydown="if(event.key==='Enter')cmAddNote('${esc}')"><button class="btn btn-primary" style="font-size:11px;padding:4px 10px" onclick="cmAddNote('${esc}')">추가</button></div>
+          ${notesHtml}
+        </div>
+      </div>
+    </div>`;
+  });
+
+  if(!clients.length) html='<div class="panel" style="text-align:center;color:var(--text2);padding:40px">등록된 활성 고객이 없습니다. 위에서 캠핑장을 추가하세요.</div>';
+
+  document.getElementById('cmList').innerHTML=html;
+}
 
 function initCampList(){
   const plans=new Set();D.camps.forEach(c=>{if(c.p)plans.add(c.p)});
