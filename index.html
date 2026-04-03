@@ -827,18 +827,13 @@ const REPORT_BOTS=[
 ];
 
 tabs.reportGen=function(){
-  const savedKey=localStorage.getItem('claude_api_key')||'';
   return `
   <div class="panel" style="background:linear-gradient(135deg,rgba(78,205,196,.08),rgba(78,205,196,.03));border-color:rgba(78,205,196,.3)">
     <h3><span class="icon" style="background:#4ecdc4"></span>AI 라운드테이블 리포트 생성기</h3>
-    <p style="color:var(--text2);font-size:13px;margin-bottom:12px">업체명을 입력하면 Claude AI가 5명의 전문가 관점에서 <strong>실제 분석</strong>을 진행합니다. (약 30초~1분 소요)</p>
-    <div class="filter-row" style="margin-bottom:8px">
+    <p style="color:var(--text2);font-size:13px;margin-bottom:12px">업체명을 입력하면 5명의 AI 전문가가 데이터 기반으로 맞춤 분석 리포트를 생성합니다.</p>
+    <div class="filter-row">
       <div style="position:relative"><input id="rgCamp" class="search" style="width:350px" placeholder="캠핑장명 입력..." autocomplete="off" oninput="rgAutoComplete()"><div id="rgAC" style="position:absolute;top:100%;left:0;width:350px;max-height:240px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;display:none;z-index:50"></div></div>
       <button class="btn btn-primary" id="rgBtn" onclick="generateReport()">AI 분석 리포트 생성</button>
-    </div>
-    <div class="filter-row">
-      <input id="rgKey" type="password" class="search" style="width:350px" placeholder="Claude API Key (sk-ant-...)" value="${savedKey}" onchange="localStorage.setItem('claude_api_key',this.value)">
-      <span style="color:var(--text2);font-size:11px">${savedKey?'키 저장됨':'API 키를 입력하세요'}</span>
     </div>
   </div>
   <div id="rgProgress" style="display:none">
@@ -1067,140 +1062,181 @@ ${rhtml}
 }
 
 // Claude API 호출
-async function callClaude(apiKey, system, userMsg){
-  const res=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1500,system,messages:[{role:'user',content:userMsg}]})
-  });
-  if(!res.ok){const e=await res.text();throw new Error('API 오류: '+res.status+' '+e);}
-  const data=await res.json();
-  return data.content[0].text;
+// === 스마트 분석 엔진 (조건 분기 기반) ===
+function smartRound(c,roundNum){
+  const f=n=>{if(Math.abs(n)>=1e8)return(n/1e8).toFixed(1)+'억';if(Math.abs(n)>=1e4)return(n/1e4).toFixed(0)+'만';return n.toLocaleString()};
+  const up=c.chg>0, m26=Math.round(c.pay26/3), m25=Math.round(c.pay25/3), sites=c.sites;
+  const eff=sites>0?Math.round(c.pay26/sites):0, pm=sites>0?Math.round(c.annual/sites/12):0;
+  const bt=c.btype||'', region=c.region, plan=c.plan||'';
+  // 규모 분류
+  const scale=sites>=40?'대형':(sites>=20?'중형':'소형');
+  // 매출 심각도
+  const severity=up?'성장':(c.chg>-20?'소폭하락':(c.chg>-40?'하락':(c.chg>-60?'급락':'폭락')));
+  // 컨셉 추출
+  const concepts=[];
+  if(bt.includes('애견')||bt.includes('반려'))concepts.push('애견 전용');
+  if(bt.includes('키즈')||bt.includes('가족'))concepts.push('키즈/가족');
+  if(bt.includes('글램'))concepts.push('글램핑');
+  if(bt.includes('카라반'))concepts.push('카라반');
+  if(bt.includes('펜션'))concepts.push('펜션');
+  if(bt.includes('노키즈'))concepts.push('노키즈');
+  if(region.includes('태안')||region.includes('안산'))concepts.push('바다');
+  if(bt.includes('계곡')||region.includes('홍천')||region.includes('영월')||region.includes('평창'))concepts.push('계곡/자연');
+  const hasConcept=concepts.length>0;
+  // 월별 추이
+  const months=D.monthly.filter(r=>r.n===c.n).sort((a,b)=>a.y===b.y?a.m-b.m:a.y-b.y);
+  const recent6=months.slice(-6);
+  const trend=recent6.length>=3?(recent6[recent6.length-1].pay>recent6[recent6.length-3].pay?'상승':'하락'):'데이터부족';
+  // 성수기/비수기 패턴
+  const summerPay=months.filter(r=>r.y===2025&&[6,7,8,9].includes(r.m)).reduce((s,r)=>s+r.pay,0);
+  const winterPay=months.filter(r=>r.y===2025&&[11,12,1,2].includes(r.m)).reduce((s,r)=>s+r.pay,0);
+  const seasonal=summerPay>0&&winterPay>0?Math.round(summerPay/winterPay*10)/10:0;
+  const msgs=[];
+
+  if(roundNum===1){
+    // R1: 매출 현황 — 규모별·심각도별 분기
+    if(up){
+      msgs.push({bot:'datapine',text:`<strong>${c.n}</strong> 매출이 성장하고 있습니다.<br>• 25년 1Q ${f(c.pay25)}원 → 26년 1Q ${f(c.pay26)}원 (<strong style="color:#4caf50">${c.chg>0?'+':''}${c.chg}%</strong>)<br>• 월평균 ${f(m25)}원 → ${f(m26)}원으로 ${f(m26-m25)}원 증가<br>• ${scale} 규모(${sites}개 사이트), 사이트당 1Q 매출 ${f(eff)}원`});
+      if(pm>80000) msgs.push({bot:'prismo',badge:'agree',text:`사이트당 월 ${f(pm)}원이면 효율이 좋은 편입니다. 이 성장세에서 <strong>가격을 올릴 여지</strong>가 있어요. 특히 주말 피크 시즌에 10~15% 인상을 테스트해볼 만합니다.`});
+      else msgs.push({bot:'prismo',text:`성장 중이지만 사이트당 월 ${f(pm)}원은 아직 여유가 있습니다. <strong>공실을 줄이는 게 먼저</strong>예요. 성장이 '가동률 상승'인지 '단가 상승'인지 구분해야 합니다.`});
+    }else{
+      msgs.push({bot:'datapine',text:`<strong>${c.n}</strong>의 매출이 <strong style="color:#f44336">${c.chg}%</strong> 하락했습니다.<br>• 25년 1Q ${f(c.pay25)}원 → 26년 1Q ${f(c.pay26)}원<br>• 월 ${f(m25-m26)}원이 빠진 상황입니다<br>• ${scale} 규모(${sites}개), 사이트당 1Q ${f(eff)}원`});
+      if(c.chg<-50) msgs.push({bot:'datapine',badge:'concern',text:`${Math.abs(c.chg)}% 하락은 시장 평균(-15~25%)보다 훨씬 큽니다. 시장 탓만이 아니라 <strong>이 캠핑장 고유의 문제</strong>가 있을 가능성이 높습니다.`});
+      if(seasonal>2.5) msgs.push({bot:'prismo',badge:'data',text:`성수기 대비 비수기 매출 비율이 <strong>${seasonal}:1</strong>입니다. 시즌 편차가 큰 구조예요. 비수기 공실 관리가 매출 회복의 핵심입니다.`});
+      else if(seasonal>0) msgs.push({bot:'prismo',text:`시즌별 편차(${seasonal}:1)는 보통 수준입니다. 특정 시즌이 아니라 <strong>전반적인 매력도</strong>가 문제일 수 있어요.`});
+    }
+    if(trend==='상승') msgs.push({bot:'compass',text:`다만 최근 3개월 추이는 <strong>상승세</strong>입니다. 바닥을 찍고 올라오는 중일 수 있어요. 이 흐름을 잡는 게 중요합니다.`});
+    else if(trend==='하락'&&!up) msgs.push({bot:'compass',badge:'concern',text:`최근 3개월도 하락 추세입니다. <strong>빠른 개입이 필요합니다.</strong>`});
+    msgs.push({bot:'compass',text:`핵심 질문: <strong>"온라인에서 이 캠핑장을 본 캠퍼가, 찾아갈 수밖에 없게 만들어져 있는가?"</strong><br>컨셉 → 리뷰 → 사진 → 설명, 이 4가지를 점검합니다.`});
+  }
+
+  else if(roundNum===2){
+    // R2: 컨셉 & 리뷰
+    if(hasConcept){
+      msgs.push({bot:'voxcamp',text:`이 캠핑장의 컨셉: <strong>${concepts.join(', ')}</strong><br><br>컨셉이 있다는 건 큰 강점입니다. 문제는 <strong>"캠퍼가 검색했을 때 이게 바로 보이느냐"</strong>예요.`});
+      if(concepts.includes('애견 전용')) msgs.push({bot:'voxcamp',badge:'extend',text:`반려동물 동반 캠핑 수요가 해마다 30%+ 증가하고 있습니다. <strong>'애견', '반려견', '소형견 전용'</strong> 키워드를 캠핏 태그·한줄소개·네이버 플레이스에 모두 넣으세요. 이 키워드 하나로 검색 유입이 확 달라집니다.`});
+      if(concepts.includes('키즈/가족')) msgs.push({bot:'voxcamp',badge:'extend',text:`가족 캠핑은 <strong>안전</strong>과 <strong>편의시설</strong>이 핵심이에요. 놀이터, 수영장, 키즈존 사진을 전면에 배치하고, '아이와 함께' 키워드를 강조하세요.`});
+      if(concepts.includes('글램핑')||concepts.includes('카라반')) msgs.push({bot:'voxcamp',badge:'extend',text:`${concepts.includes('글램핑')?'글램핑':'카라반'}은 <strong>내부 사진이 전부</strong>입니다. 깨끗한 침구, 에어컨, 바비큐 셋업 — 이 3장만 잘 찍으면 예약률이 올라갑니다.`});
+      if(concepts.includes('바다')) msgs.push({bot:'lensfield',badge:'agree',text:`바다 뷰는 <strong>드론 항공샷이 필수</strong>입니다. 해안선+캠핑장 전경을 한 장에 담으면, 그 사진 하나가 6개월을 먹여 살립니다.`});
+      if(concepts.includes('계곡/자연')) msgs.push({bot:'lensfield',badge:'agree',text:`계곡/자연 환경은 <strong>시즌별 사진 교체</strong>가 핵심이에요. 봄 신록, 여름 물놀이, 가을 단풍 — 같은 캠핑장이 완전히 다르게 보입니다.`});
+    }else{
+      msgs.push({bot:'voxcamp',badge:'concern',text:`이 캠핑장의 <strong>명확한 컨셉이 보이지 않습니다.</strong><br><br>캠퍼가 "왜 여기를 가야 하지?"에 3초 안에 답할 수 없으면 넘어갑니다.`});
+      if(sites>=30) msgs.push({bot:'voxcamp',text:`${sites}개 사이트 규모면 <strong>"넓은 사이트 간격"</strong>을 차별점으로 내세울 수 있습니다. "옆 사이트가 안 보이는 프라이빗 캠핑"은 강력한 컨셉이에요.`});
+      else msgs.push({bot:'voxcamp',text:`${scale} 규모라면 오히려 <strong>"조용하고 아늑한"</strong>을 어필할 수 있습니다. 소규모 캠핑장만의 감성을 컨셉으로 잡으세요.`});
+    }
+    msgs.push({bot:'voxcamp',text:`<strong>리뷰는 곧 신뢰입니다.</strong><br>• 좋은 리뷰 → 핵심 문구를 프로필에 인용<br>• 별점이 높다면 → 한줄소개에 "⭐ 평점 4.8" 어필<br>• 부족하다면 → 방문객 리뷰 유도 (다음 예약 할인 등)`});
+    msgs.push({bot:'datapine',badge:'data',text:`${region} 지역 ${scale} 규모에서 <strong>확실한 한 가지 강점</strong>만으로도 월 예약 5~6건 차이가 납니다.`});
+  }
+
+  else if(roundNum===3){
+    // R3: 사진 & 온라인 프로필
+    msgs.push({bot:'lensfield',text:`사진 점검 포인트:<br><br>✅ 메인 사진이 실사인가? (로고/일러스트 ❌)<br>✅ 드론 항공샷이 있는가? ${sites>=20?'('+sites+'개 사이트면 필수!)':''}<br>✅ 시즌별 사진이 다양한가?<br>✅ 사이트 내부·화장실·편의시설 사진이 있는가?`});
+    if(hasConcept&&concepts.includes('애견 전용')) msgs.push({bot:'lensfield',badge:'extend',text:`애견 캠핑장이면 <strong>반려견이 뛰어노는 실제 사진</strong>이 있어야 합니다. 빈 잔디밭보다 강아지가 있는 사진이 전환율 2배예요.`});
+    if(hasConcept&&(concepts.includes('글램핑')||concepts.includes('카라반')||concepts.includes('펜션'))) msgs.push({bot:'lensfield',badge:'extend',text:`숙박 유형이라면 <strong>내부 사진 3장이 생명</strong>입니다. ① 전체 구조 ② 침대/침구 클로즈업 ③ 창밖 뷰 — 이 3장만 잘 찍으면 됩니다.`});
+    msgs.push({bot:'lensfield',text:`<strong>온라인 설명도 사진만큼 중요합니다.</strong><br><br>• 한줄소개 = 컨셉이 바로 드러나는가?<br>• 사이트별 크기(m²)·간격·뷰 설명이 있는가?<br>• 화장실/샤워실 개수·청결도 언급이 있는가?<br>• 주변 마트·계곡·관광지 거리 정보가 있는가?`});
+    if(sites>=15) msgs.push({bot:'prismo',badge:'agree',text:`${sites}개 사이트 규모면 <strong>드론 촬영 1회로 6개월치 소재</strong>가 나옵니다. 가성비 최고의 투자예요.`});
+    msgs.push({bot:'compass',text:`캠퍼의 결정 순서: <strong>사진 3초 → 설명 10초 → 리뷰 확인 → 예약</strong><br>이 흐름에서 하나라도 막히면 이탈합니다.`});
+  }
+
+  else if(roundNum===4){
+    // R4: 가격 전략 — 규모별·상황별 분기
+    if(pm>70000) msgs.push({bot:'prismo',text:`사이트당 월 ${f(pm)}원 — <strong>양호한 수준</strong>입니다.<br><br>💡 가격을 더 올릴 수 있는 레버:<br>① 주말 피크 프라이싱 (10~15% 인상)<br>② 프리미엄 사이트 분리 (뷰 좋은 곳 별도 가격)<br>③ 부대 서비스 유료화 (장작·렌탈 등)`});
+    else if(pm>30000) msgs.push({bot:'prismo',text:`사이트당 월 ${f(pm)}원 — <strong>개선 여지가 큽니다.</strong><br><br>💡 3가지 레버:<br>① 주중 공실 → 20~30% 할인 (빈 사이트 = 0원짜리 재고)<br>② 주말 피크 → 10~15% 인상<br>③ 시즌 얼리버드 → 2주 전 예약 시 10% 할인`});
+    else msgs.push({bot:'prismo',badge:'concern',text:`사이트당 월 ${f(pm)}원은 <strong>심각하게 낮습니다.</strong> 공실이 많다는 뜻이에요.<br><br>💡 긴급 처방:<br>① 즉시 주중 30% 할인 프로모션<br>② "2박 시 1박 50% 할인" 연박 유도<br>③ 번들링 (장작+렌탈 포함 패키지)`});
+    msgs.push({bot:'datapine',badge:'data',text:`월 5건 추가 예약 × 평균 6만원 = <strong>월 30만원 추가</strong>. 연 360만원 차이입니다.`});
+    if(up) msgs.push({bot:'voxcamp',badge:'agree',text:`성장 중이니까 할인보다 <strong>"가치 올리기"</strong>가 맞습니다. 프리미엄 존을 따로 만들어 가격대를 나누는 것도 방법이에요.`});
+    else if(c.chg>-40) msgs.push({bot:'voxcamp',text:`할인할 때 중요한 건 <strong>"싸서 간다" 이미지가 붙으면 안 된다</strong>는 거예요. "기간 한정 특별가" 프레이밍이 필요합니다.`});
+    else msgs.push({bot:'voxcamp',badge:'concern',text:`매출이 ${Math.abs(c.chg)}% 빠진 상황에서는 <strong>일단 사람을 채우는 게 우선</strong>입니다. 공격적 프로모션으로 가동률부터 올리세요. 이미지는 나중에 잡을 수 있습니다.`});
+  }
+
+  else if(roundNum===5){
+    // R5: 실행 플랜 — 상황별 다른 로드맵
+    const w1=[],w2=[],w3=[];
+    if(up){
+      w1.push('캠핏 프로필 재작성 (컨셉 전면 배치)','네이버 플레이스 동기화','주말 피크 프라이싱 설계');
+      w2.push('시즌 사진 교체 (여름 준비)','상세 설명 리뉴얼 (사이트별 스펙)','프리미엄 존 기획');
+      w3.push('월간 리포트 발행','여름 성수기 프로모션 기획','재방문 유도 알림톡');
+    }else if(c.chg>-40){
+      w1.push('캠핏 프로필·한줄소개 재작성','네이버 플레이스 최적화','주중 프로모션 설계');
+      w2.push(sites>=15?'드론 항공 촬영':'주간 전경 사진 촬영','상세 설명 전면 리뉴얼','가격 조정 루틴 시작');
+      w3.push('월간 리포트 발행','여름 성수기 준비','재방문 유도 캠페인');
+    }else{
+      w1.push('메인 사진 긴급 교체 (실사)','프로필 긴급 재작성 (컨셉 발굴)','즉시 주중 30% 할인 프로모션');
+      w2.push('드론 촬영 실시','상세 설명 전면 교체','연박 할인 패키지 출시');
+      w3.push('월간 리포트 발행','성수기 프로모션 기획','가격 정상화 로드맵');
+    }
+    msgs.push({bot:'compass',text:`<strong>3개월 실행 플랜</strong><br><br>📌 <strong>1주차 (즉시)</strong><br>${w1.map(x=>'• '+x).join('<br>')}<br><br>📌 <strong>2~4주차</strong><br>${w2.map(x=>'• '+x).join('<br>')}<br><br>📌 <strong>2~3개월차</strong><br>${w3.map(x=>'• '+x).join('<br>')}`});
+    const addPay=Math.round(60000*5.5);
+    msgs.push({bot:'datapine',badge:'agree',text:`<strong>예상 효과:</strong> 월 +5~6건 → 월 +${f(addPay)}원 → 분기 +${f(addPay*3)}원`});
+    msgs.push({bot:'prismo',badge:'agree',text:`<strong>비용 대비:</strong> 월 20~30만원 투자 → 첫 달부터 본전 가능<br>드론 사진·최적화된 프로필은 <strong>계약 끝나도 남는 자산</strong>입니다.`});
+  }
+  return msgs;
 }
 
-const ROUND_CFG=[
-  {n:1,title:'매출 현황',lead:'AI 데이터분석관',status:'매출 데이터를 분석하고 있습니다...',
-   prompt:'이 캠핑장의 매출 현황을 분석하세요. 25년 1Q vs 26년 1Q 비교, 사이트당 효율, 성장/하락 원인 추정을 해주세요.'},
-  {n:2,title:'컨셉 & 리뷰',lead:'AI 마케터',status:'컨셉과 고객 경험을 분석하고 있습니다...',
-   prompt:'이 캠핑장의 컨셉(차별점)을 진단하세요. 명확한 컨셉이 있는지, 리뷰 전략은 어떻게 가야 하는지, 온라인에서 "여기를 꼭 가야 하는 이유"가 보이는지 분석해주세요.'},
-  {n:3,title:'사진 & 온라인 프로필',lead:'AI 사진분석',status:'사진과 프로필을 점검하고 있습니다...',
-   prompt:'이 캠핑장의 온라인 비주얼을 점검하세요. 메인 사진 퀄리티, 드론 항공샷 유무, 상세 설명의 충실도, 시설 안내 구체성을 평가하고 개선안을 제시하세요.'},
-  {n:4,title:'가격 전략',lead:'AI 전략기획',status:'가격 및 매출 전략을 수립하고 있습니다...',
-   prompt:'이 캠핑장의 가격 전략을 수립하세요. 사이트당 효율, 주중/주말 가격 차별화, 비수기 공실 관리, 프로모션 전략을 구체적으로 제안하세요.'},
-  {n:5,title:'실행 플랜',lead:'AI 실행매니저',status:'3개월 실행 로드맵을 작성하고 있습니다...',
-   prompt:'이전 4라운드의 분석을 종합해서 향후 3개월 실행 로드맵(1주차/1개월/3개월)을 만드세요. 구체적인 액션 항목, 담당, 우선순위를 포함하세요.'},
+// 프로그레스 연출 + 생성
+const ROUND_LABELS=[
+  {title:'매출 현황',lead:'AI 데이터분석관',status:'매출 데이터를 분석하고 있습니다'},
+  {title:'컨셉 & 리뷰',lead:'AI 마케터',status:'컨셉과 고객 경험을 분석하고 있습니다'},
+  {title:'사진 & 온라인 프로필',lead:'AI 사진분석',status:'사진과 프로필을 점검하고 있습니다'},
+  {title:'가격 전략',lead:'AI 전략기획',status:'가격 전략을 수립하고 있습니다'},
+  {title:'실행 플랜',lead:'AI 실행매니저',status:'실행 로드맵을 작성하고 있습니다'},
 ];
 
-window.generateReport=async function(){
+window.generateReport=function(){
   const raw=document.getElementById('rgCamp').value.trim();
   if(!raw)return alert('캠핑장명을 입력해주세요.');
   const name=_rgNames.find(n=>n===raw)||_rgNames.find(n=>n.includes(raw));
   if(!name)return alert('해당 캠핑장을 찾을 수 없습니다: '+raw);
-  const apiKey=document.getElementById('rgKey').value.trim();
-  if(!apiKey)return alert('Claude API 키를 입력해주세요.');
-  localStorage.setItem('claude_api_key',apiKey);
-
   const c=collectCampData(name);
   if(c.pay26===0&&c.pay25===0)return alert('해당 업체의 결제 데이터가 없습니다.');
 
-  // UI 상태
-  const btn=document.getElementById('rgBtn');btn.disabled=true;btn.textContent='생성 중...';
+  const btn=document.getElementById('rgBtn');btn.disabled=true;btn.textContent='분석 중...';
   const prog=document.getElementById('rgProgress');prog.style.display='block';
   const bar=document.getElementById('rgBar');
   const stxt=document.getElementById('rgStatusText');
   const live=document.getElementById('rgLive');live.innerHTML='';
   document.getElementById('rgPreview').innerHTML='';
 
-  const f=n=>{if(Math.abs(n)>=1e8)return(n/1e8).toFixed(1)+'억';if(Math.abs(n)>=1e4)return(n/1e4).toFixed(0)+'만';return n.toLocaleString()};
-  const m26=Math.round(c.pay26/3);const m25=Math.round(c.pay25/3);
-  const siteEff=c.sites>0?Math.round(c.pay26/c.sites):0;
-  const perSiteM=c.sites>0?Math.round(c.annual/c.sites/12):0;
+  const allRounds=[];
+  let step=0;
 
-  const dataContext=`캠핑장: ${c.n}
-위치: ${c.region}
-사이트 수: ${c.sites}개
-25년 1분기 결제: ${f(c.pay25)}원 (월평균 ${f(m25)}원)
-26년 1분기 결제: ${f(c.pay26)}원 (월평균 ${f(m26)}원)
-전년동기 대비: ${c.chg>0?'+':''}${c.chg}%
-연환산 매출: ${f(c.annual)}원
-사이트당 1분기 매출: ${f(siteEff)}원
-사이트당 월평균: ${f(perSiteM)}원
-캠핏 플랜: ${c.plan}
-캠핑장 유형: ${c.btype||'미분류'}
-캠핏 링크: ${c.link}`;
+  function nextStep(){
+    if(step>=5){
+      bar.style.width='100%';
+      stxt.textContent='리포트를 조립하고 있습니다...';
+      setTimeout(function(){
+        const html=assembleReportHTML(c,allRounds);
+        const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+        const url=URL.createObjectURL(blob);
+        window.open(url,'_blank');
+        const slug=name.replace(/\s+/g,'-').replace(/[^가-힣a-zA-Z0-9-]/g,'');
+        document.getElementById('rgPreview').innerHTML='<div class="panel" style="margin-top:16px"><h3><span class="icon" style="background:var(--green)"></span>분석 완료: '+name+'</h3><p style="color:var(--text2);font-size:13px;margin-bottom:12px">5라운드 분석이 완료되었습니다. 새 탭에서 열렸습니다.</p><a href="'+url+'" download="report-'+slug+'-'+new Date().toISOString().split('T')[0]+'.html" class="btn btn-primary">HTML 다운로드</a></div>';
+        stxt.textContent='완료!';
+        document.getElementById('rgSpinner').style.animation='none';
+        btn.disabled=false;btn.textContent='AI 분석 리포트 생성';
+      },600);
+      return;
+    }
+    const rd=ROUND_LABELS[step];
+    bar.style.width=(step/5*100)+'%';
+    stxt.textContent='R'+(step+1)+'/5 — '+rd.lead+'이(가) '+rd.status+'...';
 
-  const sysPrompt=`당신은 캠핑장 전문 AI 분석팀입니다. 5명의 전문가가 라운드테이블 형식으로 토론합니다.
-
-전문가:
-- AI 데이터분석관 (📊): 매출·수치 중심 분석
-- AI 마케터 (💬): 컨셉·리뷰·고객경험 전문
-- AI 전략기획 (💰): 가격·매출 전략 수립
-- AI 사진분석 (📸): 사진·콘텐츠·온라인 프로필 점검
-- AI 실행매니저 (🧭): 종합 정리·실행 로드맵
-
-규칙:
-1. 반드시 JSON 배열로 응답하세요: [{"bot":"datapine|voxcamp|prismo|lensfield|compass","text":"내용","badge":"agree|concern|extend|data"}]
-2. badge는 선택사항입니다 (없으면 생략)
-3. 한 라운드에 3~5개 메시지
-4. 글은 짧고 직관적으로 (한 메시지 2~4줄)
-5. HTML 태그 사용 가능 (<strong>, <br>)
-6. 이 캠핑장의 실제 데이터를 반드시 인용하세요
-7. 핵심: 컨셉(차별점), 리뷰, 사진, 온라인 설명 — 이 4가지가 합쳐져서 온라인에서 봤을 때 찾아갈 수밖에 없게 만들어야 함
-8. 대상은 40~50대 캠핑장 대표님이므로 쉽고 명확하게`;
-
-  const roundResults=[];
-  try{
-    for(let i=0;i<ROUND_CFG.length;i++){
-      const rd=ROUND_CFG[i];
-      bar.style.width=((i)/5*100)+'%';
-      stxt.textContent=`R${rd.n}/5 — ${rd.lead}가 ${rd.status}`;
-
-      const prevContext=roundResults.length>0?'\n\n이전 라운드 결과:\n'+roundResults.map((r,j)=>`R${j+1}: ${JSON.stringify(r)}`).join('\n'):'';
-      const userMsg=`${dataContext}\n\n${rd.prompt}${prevContext}`;
-
-      const raw=await callClaude(apiKey,sysPrompt,userMsg);
-      let msgs;
-      try{
-        const jsonMatch=raw.match(/\[[\s\S]*\]/);
-        msgs=jsonMatch?JSON.parse(jsonMatch[0]):[{bot:'compass',text:raw}];
-      }catch(e){msgs=[{bot:'compass',text:raw}];}
-      roundResults.push(msgs);
-
-      // 실시간 미리보기
-      let preview=`<div style="margin-top:12px"><div style="color:var(--accent);font-size:12px;font-family:monospace;margin-bottom:8px">R${rd.n} — ${rd.title} ✓</div>`;
-      msgs.forEach(m=>{
-        const b=REPORT_BOTS.find(x=>x.id===m.bot)||REPORT_BOTS[4];
-        preview+=`<div style="display:flex;gap:8px;margin:6px 0;font-size:12px"><span>${b.emoji}</span><span style="color:${b.color};font-weight:600">${b.label}</span><span style="color:var(--text2)">${(m.text||'').substring(0,80)}...</span></div>`;
+    setTimeout(function(){
+      const msgs=smartRound(c,step+1);
+      allRounds.push(msgs);
+      let preview='<div style="margin-top:12px"><div style="color:var(--accent);font-size:12px;font-family:monospace;margin-bottom:8px">R'+(step+1)+' — '+rd.title+' ✓</div>';
+      msgs.forEach(function(m){
+        var b=REPORT_BOTS.find(function(x){return x.id===m.bot})||REPORT_BOTS[4];
+        preview+='<div style="display:flex;gap:8px;margin:6px 0;font-size:12px"><span>'+b.emoji+'</span><span style="color:'+b.color+';font-weight:600">'+b.label+'</span><span style="color:var(--text2)">'+((m.text||'').replace(/<[^>]+>/g,' ')).substring(0,100)+'...</span></div>';
       });
       preview+='</div>';
       live.innerHTML+=preview;
-      bar.style.width=((i+1)/5*100)+'%';
-    }
-
-    stxt.textContent='리포트를 조립하고 있습니다...';
-    bar.style.width='100%';
-
-    // 최종 HTML 조립
-    const html=assembleReportHTML(c,roundResults);
-    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-    const url=URL.createObjectURL(blob);
-    window.open(url,'_blank');
-
-    const slug=name.replace(/\s+/g,'-').replace(/[^가-힣a-zA-Z0-9-]/g,'');
-    document.getElementById('rgPreview').innerHTML=`
-      <div class="panel" style="margin-top:16px">
-        <h3><span class="icon" style="background:var(--green)"></span>AI 분석 리포트 생성 완료: ${name}</h3>
-        <p style="color:var(--text2);font-size:13px;margin-bottom:12px">5라운드 AI 분석이 완료되었습니다. 새 탭에서 열렸습니다.</p>
-        <a href="${url}" download="report-${slug}-${new Date().toISOString().split('T')[0]}.html" class="btn btn-primary">HTML 다운로드</a>
-      </div>`;
-    stxt.textContent='완료!';
-    document.getElementById('rgSpinner').style.animation='none';
-  }catch(err){
-    stxt.textContent='오류 발생: '+err.message;
-    document.getElementById('rgSpinner').style.borderTopColor='var(--red)';
-  }finally{
-    btn.disabled=false;btn.textContent='AI 분석 리포트 생성';
+      bar.style.width=((step+1)/5*100)+'%';
+      step++;
+      setTimeout(nextStep,800+Math.random()*600);
+    },1200+Math.random()*800);
   }
+  nextStep();
 };
 
 function initCampList(){
