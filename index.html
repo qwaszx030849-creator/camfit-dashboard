@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>캠핏 거래처 관리 대시보드 - 박해준 MD</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0f172a;--card:#1e293b;--card2:#334155;--accent:#3b82f6;--accent2:#8b5cf6;--green:#10b981;--red:#ef4444;--orange:#f59e0b;--text:#f1f5f9;--text2:#94a3b8;--border:#475569}
@@ -1245,6 +1246,69 @@ window.generateReport=function(){
 const CM_KEY='camfit_clients';
 function cmLoad(){try{return JSON.parse(localStorage.getItem(CM_KEY)||'[]')}catch(e){return[]}}
 function cmSave(arr){localStorage.setItem(CM_KEY,JSON.stringify(arr))}
+const CM_SETTLE_KEY='camfit_settlements';
+function csLoad(){try{return JSON.parse(localStorage.getItem(CM_SETTLE_KEY)||'{}')}catch(e){return{}}}
+function csSave(obj){localStorage.setItem(CM_SETTLE_KEY,JSON.stringify(obj))}
+
+// 캠핏 정산내역 엑셀 파싱
+window.cmHandleFile=function(file){
+  if(!file)return;
+  const result=document.getElementById('cmUploadResult');
+  result.innerHTML='<span style="color:var(--accent)">파일 읽는 중...</span>';
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+      // 컬럼: 0=정산차수, 11=결제금액, 13=환불금액, 26=정산지급금액, 30=캠핑장명, 32=MD명, 33=정산일
+      // 첫 행은 헤더
+      const clients=cmLoad();
+      const clientNames=new Set(clients.map(c=>c.name));
+      const settlements=csLoad();
+      let matched=0, total=0, period='';
+      for(let i=1;i<rows.length;i++){
+        const row=rows[i];
+        if(!row||!row[0])continue;
+        total++;
+        if(!period)period=String(row[0]);
+        const campName=String(row[30]||'').trim();
+        const pay=parseInt(row[11])||0;
+        const refund=parseInt(row[13])||0;
+        const settle=parseInt(row[26])||0;
+        const settleDate=String(row[33]||'');
+        const mdName=String(row[32]||'');
+
+        // 등록된 고객이면 정산 데이터 저장
+        if(clientNames.has(campName)){
+          if(!settlements[campName])settlements[campName]=[];
+          // 중복 방지 (같은 정산차수+같은 유저)
+          const key=String(row[0])+'_'+String(row[1]);
+          const existing=settlements[campName].find(s=>s.key===key);
+          if(!existing){
+            settlements[campName].push({key,period:String(row[0]),date:settleDate,pay,refund,settle,md:mdName});
+          }
+          matched++;
+        }
+      }
+      csSave(settlements);
+
+      // 결과 표시
+      const summary=`<div style="padding:12px;background:var(--card2);border-radius:8px;margin-top:8px">
+        <strong style="color:var(--green)">✓ 업로드 완료</strong><br>
+        <span style="font-size:12px;color:var(--text2)">
+          정산 차수: <strong>${period}</strong><br>
+          전체 ${total}건 중 등록 고객 <strong>${matched}건</strong> 매칭
+        </span>
+      </div>`;
+      result.innerHTML=summary;
+      renderClientMgmt();
+    }catch(err){
+      result.innerHTML='<span style="color:var(--red)">파싱 오류: '+err.message+'</span>';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+};
 
 tabs.clientMgmt=function(){
   const clients=cmLoad();
@@ -1258,6 +1322,16 @@ tabs.clientMgmt=function(){
       <select id="cmNewTier"><option value="light">Light (월22만)</option><option value="standard">Standard (월33만)</option></select>
       <button class="btn btn-green" onclick="cmAddClient()">고객 추가</button>
     </div>
+  </div>
+  <div class="panel" style="margin-top:12px">
+    <h3><span class="icon" style="background:var(--accent)"></span>주간 정산 엑셀 업로드</h3>
+    <p style="color:var(--text2);font-size:12px;margin-bottom:10px">캠핏 정산내역 엑셀(.xlsx)을 업로드하면 등록된 고객의 주간 정산이 자동 업데이트됩니다.</p>
+    <div id="cmDropZone" style="border:2px dashed var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:all .2s" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="event.preventDefault();this.style.borderColor='var(--border)';cmHandleFile(event.dataTransfer.files[0])" onclick="document.getElementById('cmFileInput').click()">
+      <div style="font-size:28px;margin-bottom:8px">📁</div>
+      <div style="color:var(--text2);font-size:13px">캠핏 정산내역.xlsx를 드래그하거나 클릭해서 업로드</div>
+      <input type="file" id="cmFileInput" accept=".xlsx,.xls" style="display:none" onchange="cmHandleFile(this.files[0])">
+    </div>
+    <div id="cmUploadResult" style="margin-top:10px"></div>
   </div>
   <div class="kpi-row" id="cmKpi"></div>
   <div id="cmList"></div>`;
@@ -1382,8 +1456,25 @@ function renderClientMgmt(){
         <span>26Q1: <strong>${fmt(m26)}</strong></span>
         <span class="${chg>0?'up':'down'}">${chg>0?'▲':'▼'}${Math.abs(chg)}% vs 25Q1</span>
         <span>월비용: <strong>${cl.tier==='standard'?'33만':'22만'}</strong></span>
-      </div>
-      <div style="display:flex;gap:24px;flex-wrap:wrap">
+      </div>`;
+
+    // 주간 정산 이력
+    const settleAll=csLoad();
+    const campSettle=(settleAll[cl.name]||[]).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    const totalSettle=campSettle.reduce((s,r)=>s+r.settle,0);
+    const totalPay=campSettle.reduce((s,r)=>s+r.pay,0);
+    if(campSettle.length>0){
+      let settleRows=campSettle.slice(0,8).map(s=>`<tr><td style="font-size:11px;color:var(--text2)">${s.period||''}</td><td style="text-align:right">${fmt(s.pay)}</td><td style="text-align:right;color:var(--red)">${s.refund?fmt(s.refund):'-'}</td><td style="text-align:right;color:var(--green);font-weight:600">${fmt(s.settle)}</td></tr>`).join('');
+      html+=`<div class="panel" style="margin:-8px 0 8px;padding:12px 16px;background:var(--card2);border:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:12px;color:var(--text2)">📋 주간 정산 이력 (${campSettle.length}건)</span>
+          <span style="font-size:12px">누적 결제 <strong>${fmt(totalPay)}</strong> · 누적 정산 <strong style="color:var(--green)">${fmt(totalSettle)}</strong></span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="text-align:left;padding:4px 6px;color:var(--text2);font-weight:600">정산 차수</th><th style="text-align:right;padding:4px 6px;color:var(--text2)">결제</th><th style="text-align:right;padding:4px 6px;color:var(--text2)">환불</th><th style="text-align:right;padding:4px 6px;color:var(--text2)">정산액</th></tr></thead><tbody>${settleRows}</tbody></table>
+      </div>`;
+    }
+
+    html+=`<div style="display:flex;gap:24px;flex-wrap:wrap">
         <div style="flex:1;min-width:200px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
             <span style="font-size:12px;color:var(--text2)">서비스 체크리스트 (${done}/${taskKeys.length})</span>
