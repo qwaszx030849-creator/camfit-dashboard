@@ -278,8 +278,17 @@ overview(){
   // 월 옵션 생성
   const availYears=[...new Set(activeMonthly().map(r=>r.y))].sort((a,b)=>b-a);
   const yearOpts=availYears.map(y=>`<option value="${y}" ${y===2026?'selected':''}>${y}년</option>`).join('');
+  const lastUpload=localStorage.getItem('settle_last_upload')||'';
   return `
   ${hiddenBarHTML()}
+  <div style="display:flex;gap:12px;margin-bottom:16px;align-items:stretch">
+    <div id="mainDropZone" style="flex:1;border:2px dashed var(--border);border-radius:12px;padding:16px 20px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:12px" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="event.preventDefault();this.style.borderColor='var(--border)';handleSettleUpload(event.dataTransfer.files[0])" onclick="document.getElementById('mainFileInput').click()">
+      <div style="font-size:24px">📁</div>
+      <div><div style="font-size:13px;font-weight:600;color:var(--text)">정산내역 엑셀 업로드</div><div style="font-size:11px;color:var(--text2)">캠핏 정산내역.xlsx 드래그 또는 클릭${lastUpload?' · 최근: '+lastUpload:''}</div></div>
+      <input type="file" id="mainFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleSettleUpload(this.files[0])">
+    </div>
+    <div id="mainUploadResult" style="flex:0 0 auto;display:flex;align-items:center"></div>
+  </div>
   <div class="kpi-row">
     <div class="kpi"><div class="label">총 담당 거래처</div><div class="value">${camps.length}개</div><div class="change"><span class="tag tag-green">${ac}개 운영중</span></div></div>
     <div class="kpi"><div class="label">2026 결제금액 (${periodLabel})</div><div class="value">${fmt(tp26)}</div><div class="change ${pc>0?'up':'down'}">${pc!==null?(pc>0?'▲':'▼')+Math.abs(pc).toFixed(1)+'% vs 2025 동기간':'N/A'}</div></div>
@@ -1250,61 +1259,50 @@ const CM_SETTLE_KEY='camfit_settlements';
 function csLoad(){try{return JSON.parse(localStorage.getItem(CM_SETTLE_KEY)||'{}')}catch(e){return{}}}
 function csSave(obj){localStorage.setItem(CM_SETTLE_KEY,JSON.stringify(obj))}
 
-// 캠핏 정산내역 엑셀 파싱
-window.cmHandleFile=function(file){
+// 전체 정산내역 엑셀 파싱 → 메인 대시보드 데이터 업데이트
+window.handleSettleUpload=function(file){
   if(!file)return;
-  const result=document.getElementById('cmUploadResult');
-  result.innerHTML='<span style="color:var(--accent)">파일 읽는 중...</span>';
+  const result=document.getElementById('mainUploadResult');
+  result.innerHTML='<span style="color:var(--accent);font-size:12px">읽는 중...</span>';
   const reader=new FileReader();
   reader.onload=function(e){
     try{
       const wb=XLSX.read(e.target.result,{type:'array'});
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{header:1});
-      // 컬럼: 0=정산차수, 11=결제금액, 13=환불금액, 26=정산지급금액, 30=캠핑장명, 32=MD명, 33=정산일
-      // 첫 행은 헤더
-      const clients=cmLoad();
-      const clientNames=new Set(clients.map(c=>c.name));
+      // 컬럼: 0=정산차수, 10=정산건수, 11=결제금액, 13=환불금액, 26=정산지급금액, 30=캠핑장명, 31=플랜, 32=MD명, 33=정산일
       const settlements=csLoad();
-      let matched=0, total=0, period='';
+      let total=0, newCount=0, period='', campSet=new Set();
+      // 정산차수에서 연/월 추출: "2026년 3월 1주차" → y=2026, m=3
       for(let i=1;i<rows.length;i++){
         const row=rows[i];
         if(!row||!row[0])continue;
         total++;
         if(!period)period=String(row[0]);
         const campName=String(row[30]||'').trim();
+        if(!campName)continue;
+        campSet.add(campName);
         const pay=parseInt(row[11])||0;
         const refund=parseInt(row[13])||0;
         const settle=parseInt(row[26])||0;
+        const cnt=parseInt(row[10])||0;
         const settleDate=String(row[33]||'');
         const mdName=String(row[32]||'');
+        const planName=String(row[31]||'');
 
-        // 등록된 고객이면 정산 데이터 저장
-        if(clientNames.has(campName)){
-          if(!settlements[campName])settlements[campName]=[];
-          // 중복 방지 (같은 정산차수+같은 유저)
-          const key=String(row[0])+'_'+String(row[1]);
-          const existing=settlements[campName].find(s=>s.key===key);
-          if(!existing){
-            settlements[campName].push({key,period:String(row[0]),date:settleDate,pay,refund,settle,md:mdName});
-          }
-          matched++;
+        if(!settlements[campName])settlements[campName]=[];
+        const key=String(row[0])+'_'+String(row[1]);
+        if(!settlements[campName].find(s=>s.key===key)){
+          settlements[campName].push({key,period:String(row[0]),date:settleDate,pay,refund,settle,cnt,md:mdName,plan:planName});
+          newCount++;
         }
       }
       csSave(settlements);
+      localStorage.setItem('settle_last_upload',period);
 
-      // 결과 표시
-      const summary=`<div style="padding:12px;background:var(--card2);border-radius:8px;margin-top:8px">
-        <strong style="color:var(--green)">✓ 업로드 완료</strong><br>
-        <span style="font-size:12px;color:var(--text2)">
-          정산 차수: <strong>${period}</strong><br>
-          전체 ${total}건 중 등록 고객 <strong>${matched}건</strong> 매칭
-        </span>
-      </div>`;
-      result.innerHTML=summary;
-      renderClientMgmt();
+      result.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px"><span style="color:var(--green);font-weight:700">✓</span> <strong style="font-size:12px">'+period+'</strong><br><span style="font-size:11px;color:var(--text2)">'+total+'건 · '+campSet.size+'개 업체 · 신규 '+newCount+'건</span></div>';
     }catch(err){
-      result.innerHTML='<span style="color:var(--red)">파싱 오류: '+err.message+'</span>';
+      result.innerHTML='<span style="color:var(--red);font-size:12px">오류: '+err.message+'</span>';
     }
   };
   reader.readAsArrayBuffer(file);
@@ -1322,16 +1320,6 @@ tabs.clientMgmt=function(){
       <select id="cmNewTier"><option value="light">Light (월22만)</option><option value="standard">Standard (월33만)</option></select>
       <button class="btn btn-green" onclick="cmAddClient()">고객 추가</button>
     </div>
-  </div>
-  <div class="panel" style="margin-top:12px">
-    <h3><span class="icon" style="background:var(--accent)"></span>주간 정산 엑셀 업로드</h3>
-    <p style="color:var(--text2);font-size:12px;margin-bottom:10px">캠핏 정산내역 엑셀(.xlsx)을 업로드하면 등록된 고객의 주간 정산이 자동 업데이트됩니다.</p>
-    <div id="cmDropZone" style="border:2px dashed var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:all .2s" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="event.preventDefault();this.style.borderColor='var(--border)';cmHandleFile(event.dataTransfer.files[0])" onclick="document.getElementById('cmFileInput').click()">
-      <div style="font-size:28px;margin-bottom:8px">📁</div>
-      <div style="color:var(--text2);font-size:13px">캠핏 정산내역.xlsx를 드래그하거나 클릭해서 업로드</div>
-      <input type="file" id="cmFileInput" accept=".xlsx,.xls" style="display:none" onchange="cmHandleFile(this.files[0])">
-    </div>
-    <div id="cmUploadResult" style="margin-top:10px"></div>
   </div>
   <div class="kpi-row" id="cmKpi"></div>
   <div id="cmList"></div>`;
