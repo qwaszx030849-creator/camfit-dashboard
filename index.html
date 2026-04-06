@@ -97,6 +97,7 @@ th.sortable .arr-up,th.sortable .arr-down{display:block}
   <button data-tab="clientMgmt">고객 관리</button>
   <button data-tab="market">시장 동향</button>
   <button data-tab="camps">거래처 목록</button>
+  <button data-tab="newsletter">📰 뉴스레터</button>
 </div>
 <div class="content" id="app"></div>
 
@@ -466,6 +467,19 @@ camps(){
   <div class="scroll-table" style="max-height:700px"><table id="campTable"><thead><tr>
     <th data-sort="n">캠핑장명</th><th data-sort="s">운영상태</th><th data-sort="r">등록상태</th><th data-sort="p">플랜</th><th data-sort="mp">MD플랜</th><th data-sort="region">지역</th><th data-sort="z">사이트수</th><th data-sort="rv">리뷰</th><th data-sort="ex">노출수</th><th data-sort="fv">찜</th><th data-sort="bt">업체종목</th><th>링크</th><th>관리</th>
   </tr></thead><tbody></tbody></table></div>`;
+},
+newsletter(){
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+    <div>
+      <h2 style="font-size:20px;font-weight:700">📰 캠핑장 운영 뉴스레터</h2>
+      <p style="color:var(--text2);font-size:13px;margin-top:4px">캠핑장 사장님을 위한 주간 뉴스레터 아카이브</p>
+    </div>
+    <a href="https://camping-newsletter.vercel.app/" target="_blank" class="btn btn-primary" style="text-decoration:none">🔗 전체 아카이브 보기</a>
+  </div>
+  <div id="newsletterContent" style="display:flex;flex-direction:column;gap:16px">
+    <div style="text-align:center;padding:40px;color:var(--text2)">뉴스레터를 불러오는 중...</div>
+  </div>`;
 }
 };
 
@@ -484,6 +498,7 @@ function renderTab(name){
   if(name==='clientMgmt')renderClientMgmt();
   if(name==='market')renderMarketCharts();
   if(name==='camps')initCampList();
+  if(name==='newsletter')loadNewsletters();
 }
 
 document.getElementById('navBar').addEventListener('click',e=>{
@@ -1483,6 +1498,53 @@ function renderClientMgmt(){
   if(!clients.length) html='<div class="panel" style="text-align:center;color:var(--text2);padding:40px">등록된 활성 고객이 없습니다. 위에서 캠핑장을 추가하세요.</div>';
 
   document.getElementById('cmList').innerHTML=html;
+}
+
+async function loadNewsletters(){
+  const container=document.getElementById('newsletterContent');
+  if(!container)return;
+  const NEWSLETTER_BASE='https://camping-newsletter.vercel.app/data/';
+  const now=new Date();
+  const newsletters=[];
+  // 최근 3개월치 뉴스레터 JSON 시도
+  for(let mOff=0;mOff<3;mOff++){
+    const d=new Date(now.getFullYear(),now.getMonth()-mOff,1);
+    const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0');
+    for(let w=5;w>=1;w--){
+      try{
+        const res=await fetch(`${NEWSLETTER_BASE}newsletter_${y}_${m}_week${w}.json`);
+        if(res.ok){const data=await res.json();newsletters.push(data);}
+      }catch(e){}
+    }
+  }
+  if(!newsletters.length){
+    container.innerHTML='<div style="text-align:center;padding:40px;color:var(--text2)">뉴스레터 데이터를 불러올 수 없습니다.<br><a href="https://camping-newsletter.vercel.app/" target="_blank" style="color:var(--accent)">아카이브에서 직접 확인하기</a></div>';
+    return;
+  }
+  container.innerHTML=newsletters.map(nl=>`
+    <div class="panel" style="cursor:default">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3 style="margin:0"><span class="icon" style="background:var(--green)"></span>${nl.week_info?.display||nl.title}</h3>
+        <span class="tag tag-green">${nl.items_count||nl.items?.length||0}개 소식</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${(nl.items||[]).slice(0,5).map((item,i)=>`
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:8px 12px;background:var(--card2);border-radius:8px">
+            <span style="color:var(--accent);font-weight:700;min-width:20px">${i+1}</span>
+            <div style="flex:1;min-width:0">
+              <a href="${item.url}" target="_blank" style="color:var(--text);text-decoration:none;font-size:14px;font-weight:500;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.title}</a>
+              ${item.description?`<p style="color:var(--text2);font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.description.slice(0,60)}...</p>`:''}
+            </div>
+            <span class="tag tag-blue" style="flex-shrink:0">${item.category||item.source||''}</span>
+          </div>
+        `).join('')}
+        ${(nl.items||[]).length>5?`<div style="text-align:center;color:var(--text2);font-size:12px;padding:4px">외 ${nl.items.length-5}건 더보기 →</div>`:''}
+      </div>
+      <div style="margin-top:12px;text-align:right">
+        <a href="https://camping-newsletter.vercel.app/newsletter/${nl.id}" target="_blank" style="color:var(--accent);font-size:13px;text-decoration:none">상세 보기 →</a>
+      </div>
+    </div>
+  `).join('');
 }
 
 function initCampList(){
