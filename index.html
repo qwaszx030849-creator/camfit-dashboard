@@ -1286,9 +1286,12 @@ window.handleSettleUpload=function(file){
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{header:1});
       // 컬럼: 0=정산차수, 10=정산건수, 11=결제금액, 13=환불금액, 26=정산지급금액, 30=캠핑장명, 31=플랜, 32=MD명, 33=정산일
+      if(rows.length<=1){
+        result.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px"><span style="color:var(--orange);font-weight:700">⚠</span> <span style="font-size:12px">데이터가 없는 파일입니다 (헤더만 존재). 다른 파일을 업로드해주세요.</span></div>';
+        return;
+      }
       const settlements=csLoad();
       let total=0, newCount=0, period='', campSet=new Set();
-      // 정산차수에서 연/월 추출: "2026년 3월 1주차" → y=2026, m=3
       for(let i=1;i<rows.length;i++){
         const row=rows[i];
         if(!row||!row[0])continue;
