@@ -1512,19 +1512,23 @@ async function loadNewsletters(forceRefresh){
   if(!container)return;
   const btn=document.getElementById('newsletterRefreshBtn');
   if(btn){btn.disabled=true;btn.textContent='⏳ 불러오는 중...';}
-  const NEWSLETTER_BASE='https://camping-newsletter.vercel.app/data/';
+  const BASES=['data/newsletter/','https://camping-newsletter.vercel.app/data/'];
   const now=new Date();
   const newsletters=[];
   const cacheBust=forceRefresh?`?t=${Date.now()}`:'';
-  // 최근 3개월치 뉴스레터 JSON 시도
+  // 최근 3개월치 뉴스레터 JSON 시도 (로컬 우선, Vercel 폴백)
   for(let mOff=0;mOff<3;mOff++){
     const d=new Date(now.getFullYear(),now.getMonth()-mOff,1);
     const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0');
     for(let w=5;w>=1;w--){
-      try{
-        const res=await fetch(`${NEWSLETTER_BASE}newsletter_${y}_${m}_week${w}.json${cacheBust}`);
-        if(res.ok){const data=await res.json();newsletters.push(data);}
-      }catch(e){}
+      const fname=`newsletter_${y}_${m}_week${w}.json`;
+      let loaded=false;
+      for(const base of BASES){
+        try{
+          const res=await fetch(`${base}${fname}${cacheBust}`);
+          if(res.ok){const data=await res.json();newsletters.push(data);loaded=true;break;}
+        }catch(e){}
+      }
     }
   }
   if(btn){btn.disabled=false;btn.textContent='🔄 최신화';}
