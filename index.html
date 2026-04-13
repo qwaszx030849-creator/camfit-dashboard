@@ -1582,7 +1582,10 @@ function openNewsletterDetail(idx){
           <h2 style="font-size:20px;font-weight:700;margin:0">${nl.week_info?.display||nl.title}</h2>
           <p style="color:var(--text2);font-size:12px;margin-top:4px">${nl.created_at?new Date(nl.created_at).toLocaleDateString('ko-KR'):''} | ${nl.items_count||nl.items?.length||0}개 소식</p>
         </div>
-        <button onclick="document.getElementById('nlDetailOverlay').remove()" style="background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer;padding:4px 8px">✕</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="copyNewsletterForKakao(${idx})" id="nlKakaoBtn" class="btn" style="background:var(--orange);color:#fff;font-size:12px;padding:6px 14px">📱 카톡 복사</button>
+          <button onclick="document.getElementById('nlDetailOverlay').remove()" style="background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer;padding:4px 8px">✕</button>
+        </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:12px">
         ${(nl.items||[]).map((item,i)=>`
@@ -1602,6 +1605,38 @@ function openNewsletterDetail(idx){
       </div>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+function copyNewsletterForKakao(idx){
+  const nl=window._nlCache[idx];
+  if(!nl)return;
+  const lines=[];
+  lines.push(`🏕️ 캠핑장 운영 뉴스레터`);
+  lines.push(`📅 ${nl.week_info?.display||nl.title}`);
+  lines.push('');
+  lines.push('ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ');
+  lines.push('');
+  (nl.items||[]).forEach((item,i)=>{
+    lines.push(`📌 ${i+1}. ${item.title}`);
+    lines.push('');
+    const desc=item.summary||item.description;
+    if(desc){lines.push(`💬 ${desc}`);lines.push('');}
+    lines.push(`🔗 ${item.url}`);
+    lines.push('');
+    lines.push('ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ');
+    lines.push('');
+  });
+  lines.push('');
+  lines.push('💡 매주 월요일 발송');
+  const text=lines.join('\n');
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn=document.getElementById('nlKakaoBtn');
+    if(btn){btn.textContent='✅ 복사 완료!';btn.style.background='var(--green)';setTimeout(()=>{btn.textContent='📱 카톡 복사';btn.style.background='var(--orange)';},2000);}
+  }).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;left:-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();
+    const btn=document.getElementById('nlKakaoBtn');
+    if(btn){btn.textContent='✅ 복사 완료!';btn.style.background='var(--green)';setTimeout(()=>{btn.textContent='📱 카톡 복사';btn.style.background='var(--orange)';},2000);}
+  });
 }
 
 function initCampList(){
