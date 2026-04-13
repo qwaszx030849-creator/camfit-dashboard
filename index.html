@@ -1541,7 +1541,8 @@ async function loadNewsletters(forceRefresh){
     container.innerHTML='<div style="text-align:center;padding:40px;color:var(--text2)">뉴스레터 데이터를 불러올 수 없습니다.<br><a href="https://camping-newsletter.vercel.app/" target="_blank" style="color:var(--accent)">아카이브에서 직접 확인하기</a></div>';
     return;
   }
-  container.innerHTML=newsletters.map(nl=>`
+  window._nlCache=newsletters;
+  container.innerHTML=newsletters.map((nl,idx)=>`
     <div class="panel" style="cursor:default">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <h3 style="margin:0"><span class="icon" style="background:var(--green)"></span>${nl.week_info?.display||nl.title}</h3>
@@ -1561,10 +1562,46 @@ async function loadNewsletters(forceRefresh){
         ${(nl.items||[]).length>5?`<div style="text-align:center;color:var(--text2);font-size:12px;padding:4px">외 ${nl.items.length-5}건 더보기 →</div>`:''}
       </div>
       <div style="margin-top:12px;text-align:right">
-        <a href="https://camping-newsletter.vercel.app/newsletter/${nl.id}" target="_blank" style="color:var(--accent);font-size:13px;text-decoration:none">상세 보기 →</a>
+        <a href="#" onclick="openNewsletterDetail(${idx});return false" style="color:var(--accent);font-size:13px;text-decoration:none">상세 보기 →</a>
       </div>
     </div>
   `).join('');
+}
+
+function openNewsletterDetail(idx){
+  const nl=window._nlCache[idx];
+  if(!nl)return;
+  const overlay=document.createElement('div');
+  overlay.id='nlDetailOverlay';
+  overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:9999;display:flex;justify-content:center;align-items:center;padding:20px';
+  overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};
+  overlay.innerHTML=`
+    <div style="background:var(--card);border-radius:16px;padding:28px;max-width:700px;width:100%;max-height:85vh;overflow-y:auto;border:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div>
+          <h2 style="font-size:20px;font-weight:700;margin:0">${nl.week_info?.display||nl.title}</h2>
+          <p style="color:var(--text2);font-size:12px;margin-top:4px">${nl.created_at?new Date(nl.created_at).toLocaleDateString('ko-KR'):''} | ${nl.items_count||nl.items?.length||0}개 소식</p>
+        </div>
+        <button onclick="document.getElementById('nlDetailOverlay').remove()" style="background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer;padding:4px 8px">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        ${(nl.items||[]).map((item,i)=>`
+          <div style="padding:14px 16px;background:var(--card2);border-radius:10px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="color:var(--accent);font-weight:700;font-size:16px">${i+1}</span>
+                <span class="tag tag-blue">${item.category||item.source||''}</span>
+              </div>
+              ${item.published_date?`<span style="color:var(--text2);font-size:11px;white-space:nowrap">${new Date(item.published_date).toLocaleDateString('ko-KR')}</span>`:''}
+            </div>
+            <a href="${item.url}" target="_blank" style="color:var(--text);text-decoration:none;font-size:15px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px">${item.title}</a>
+            ${item.summary?`<p style="color:var(--text2);font-size:13px;line-height:1.6;margin:0">${item.summary}</p>`:item.description?`<p style="color:var(--text2);font-size:13px;line-height:1.6;margin:0">${item.description}</p>`:''}
+            <div style="margin-top:8px"><a href="${item.url}" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">원문 보기 →</a></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
 }
 
 function initCampList(){
