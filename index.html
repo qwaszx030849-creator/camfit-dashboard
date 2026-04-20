@@ -1512,7 +1512,12 @@ async function loadNewsletters(forceRefresh){
   if(!container)return;
   const btn=document.getElementById('newsletterRefreshBtn');
   if(btn){btn.disabled=true;btn.textContent='⏳ 불러오는 중...';}
-  const BASES=['data/newsletter/','https://camping-newsletter.vercel.app/data/'];
+  // GitHub raw 우선 (camping-newsletter 레포에서 매주 월요일 자동 갱신)
+  // 실패 시 로컬(data/newsletter/) 폴백
+  const BASES=[
+    'https://raw.githubusercontent.com/qwaszx030849-creator/camping-newsletter/main/output/',
+    'data/newsletter/'
+  ];
   const now=new Date();
   const newsletters=[];
   const cacheBust=forceRefresh?`?t=${Date.now()}`:'';
