@@ -1299,12 +1299,12 @@ window.handleSettleUpload=function(file){
         return;
       }
       const settlements=csLoad();
-      let total=0, newCount=0, period='', campSet=new Set();
+      let total=0, newCount=0, campSet=new Set(), periodSet=new Set();
       for(let i=1;i<rows.length;i++){
         const row=rows[i];
         if(!row||!row[0])continue;
         total++;
-        if(!period)period=String(row[0]);
+        periodSet.add(String(row[0]));
         const campName=String(row[1]||'').trim();
         if(!campName)continue;
         campSet.add(campName);
@@ -1328,14 +1328,16 @@ window.handleSettleUpload=function(file){
         }
       }
       csSave(settlements);
-      localStorage.setItem('settle_last_upload',period);
+      const periodList=Array.from(periodSet).sort();
+      const periodLabel=periodList.length===1?periodList[0]:(periodList[0]+' ~ '+periodList[periodList.length-1]+' ('+periodList.length+'개 주차)');
+      localStorage.setItem('settle_last_upload',periodLabel);
 
       // 정산 데이터를 D.monthly에 머지 → KPI/표/차트에 즉시 반영
       mergeSettlementsToMonthly();
       // 메인 탭 재렌더
       try{if(typeof renderTab==='function')renderTab('overview');}catch(e){}
 
-      result.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px"><span style="color:var(--green);font-weight:700">✓</span> <strong style="font-size:12px">'+period+' 반영 완료</strong><br><span style="font-size:11px;color:var(--text2)">'+total+'건 · '+campSet.size+'개 업체 · 신규 '+newCount+'건 · KPI 갱신됨</span></div>';
+      result.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px"><span style="color:var(--green);font-weight:700">✓</span> <strong style="font-size:12px">'+periodLabel+' 반영 완료</strong><br><span style="font-size:11px;color:var(--text2)">'+total+'건 · '+campSet.size+'개 업체 · 신규 '+newCount+'건 · KPI 갱신됨</span></div>';
     }catch(err){
       result.innerHTML='<span style="color:var(--red);font-size:12px">오류: '+err.message+'</span>';
     }
