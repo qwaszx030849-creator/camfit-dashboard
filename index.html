@@ -1279,6 +1279,11 @@ function csLoad(){try{return JSON.parse(localStorage.getItem(CM_SETTLE_KEY)||'{}
 function csSave(obj){localStorage.setItem(CM_SETTLE_KEY,JSON.stringify(obj))}
 
 // 전체 정산내역 엑셀 파싱 → 메인 대시보드 데이터 업데이트
+// 실제 엑셀 컬럼 (캠핏 정산내역.xlsx, 21개 컬럼):
+// 0=정산차수, 1=사업자명(캠핑장명), 2=정산대상건수, 3=결제금액, 4=옵션결제금액,
+// 5=환불금액, 6=쿠폰지원금액, 7=쿠폰할당금액, 8=사용포인트, 9=정산대상금액,
+// 10=온라인결제수수료, 11=기본수수료, 12=플랜수수료, 13=PG수수료, 14=파트너수수료,
+// 15=옵션사용수수료, 16=옵션중개수수료, 17=정산지급금액, 18=현재플랜명, 19=현재MD명, 20=정산일
 window.handleSettleUpload=function(file){
   if(!file)return;
   const result=document.getElementById('mainUploadResult');
@@ -1289,7 +1294,6 @@ window.handleSettleUpload=function(file){
       const wb=XLSX.read(e.target.result,{type:'array'});
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{header:1});
-      // 컬럼: 0=정산차수, 10=정산건수, 11=결제금액, 13=환불금액, 26=정산지급금액, 30=캠핑장명, 31=플랜, 32=MD명, 33=정산일
       if(rows.length<=1){
         result.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px"><span style="color:var(--orange);font-weight:700">⚠</span> <span style="font-size:12px">데이터가 없는 파일입니다 (헤더만 존재). 다른 파일을 업로드해주세요.</span></div>';
         return;
@@ -1301,34 +1305,86 @@ window.handleSettleUpload=function(file){
         if(!row||!row[0])continue;
         total++;
         if(!period)period=String(row[0]);
-        const campName=String(row[30]||'').trim();
+        const campName=String(row[1]||'').trim();
         if(!campName)continue;
         campSet.add(campName);
-        const pay=parseInt(row[11])||0;
-        const refund=parseInt(row[13])||0;
-        const settle=parseInt(row[26])||0;
-        const cnt=parseInt(row[10])||0;
-        const settleDate=String(row[33]||'');
-        const mdName=String(row[32]||'');
-        const planName=String(row[31]||'');
+        const cnt=parseInt(row[2])||0;
+        const pay=parseInt(row[3])||0;
+        const refund=parseInt(row[5])||0;
+        const bf=parseInt(row[11])||0;
+        const pf=parseInt(row[12])||0;
+        const pg=parseInt(row[13])||0;
+        const ptn=parseInt(row[14])||0;
+        const settle=parseInt(row[17])||0;
+        const planName=String(row[18]||'');
+        const mdName=String(row[19]||'');
+        const settleDate=String(row[20]||'');
 
         if(!settlements[campName])settlements[campName]=[];
-        const key=String(row[0])+'_'+String(row[1]);
+        const key=String(row[0])+'_'+campName;
         if(!settlements[campName].find(s=>s.key===key)){
-          settlements[campName].push({key,period:String(row[0]),date:settleDate,pay,refund,settle,cnt,md:mdName,plan:planName});
+          settlements[campName].push({key,period:String(row[0]),date:settleDate,pay,refund,settle,cnt,bf,pf,pg,ptn,md:mdName,plan:planName});
           newCount++;
         }
       }
       csSave(settlements);
       localStorage.setItem('settle_last_upload',period);
 
-      result.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px"><span style="color:var(--green);font-weight:700">✓</span> <strong style="font-size:12px">'+period+'</strong><br><span style="font-size:11px;color:var(--text2)">'+total+'건 · '+campSet.size+'개 업체 · 신규 '+newCount+'건</span></div>';
+      // 정산 데이터를 D.monthly에 머지 → KPI/표/차트에 즉시 반영
+      mergeSettlementsToMonthly();
+      // 메인 탭 재렌더
+      try{if(typeof renderTab==='function')renderTab('overview');}catch(e){}
+
+      result.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px"><span style="color:var(--green);font-weight:700">✓</span> <strong style="font-size:12px">'+period+' 반영 완료</strong><br><span style="font-size:11px;color:var(--text2)">'+total+'건 · '+campSet.size+'개 업체 · 신규 '+newCount+'건 · KPI 갱신됨</span></div>';
     }catch(err){
       result.innerHTML='<span style="color:var(--red);font-size:12px">오류: '+err.message+'</span>';
     }
   };
   reader.readAsArrayBuffer(file);
 };
+
+// 누적된 정산 데이터를 월별로 집계해 D.monthly에 머지
+// - 같은 캠핑장+연+월 항목이 있으면 정산 데이터로 덮어씀 (cnt/pay/ref/set/bf/pf/pg/ptn)
+// - fmd/rmd/hmd(MD수수료)는 정산 엑셀에 없으므로 기존 RAW 값 보존
+window.mergeSettlementsToMonthly=function(){
+  const settlements=csLoad();
+  if(!settlements||Object.keys(settlements).length===0)return;
+  // (campName, y, m) 단위로 집계
+  const byMonth={};
+  Object.entries(settlements).forEach(([campName, items])=>{
+    (items||[]).forEach(s=>{
+      // 정산일 파싱: "2025.10.22" / "2025-10-22" / "2025/10/22" 모두 지원
+      const dateStr=String(s.date||'').replace(/[^\d]/g,'.');
+      const parts=dateStr.split('.').filter(Boolean);
+      if(parts.length<2)return;
+      const y=parseInt(parts[0]), m=parseInt(parts[1]);
+      if(!y||!m||m<1||m>12)return;
+      const k=campName+'|'+y+'|'+m;
+      if(!byMonth[k])byMonth[k]={n:campName,y,m,cnt:0,pay:0,ref:0,set:0,bf:0,pf:0,pg:0,ptn:0};
+      const r=byMonth[k];
+      r.cnt+=s.cnt||0;
+      r.pay+=s.pay||0;
+      r.ref+=s.refund||0;
+      r.set+=s.settle||0;
+      r.bf+=s.bf||0;
+      r.pf+=s.pf||0;
+      r.pg+=s.pg||0;
+      r.ptn+=s.ptn||0;
+    });
+  });
+  // D.monthly에 머지 (덮어쓰기/추가)
+  Object.values(byMonth).forEach(r=>{
+    const idx=D.monthly.findIndex(x=>x.n===r.n&&x.y===r.y&&x.m===r.m);
+    if(idx>=0){
+      const old=D.monthly[idx];
+      D.monthly[idx]={...r, fmd:old.fmd||0, rmd:old.rmd||0, hmd:old.hmd||0};
+    }else{
+      D.monthly.push({...r, fmd:0, rmd:0, hmd:0});
+    }
+  });
+};
+// 페이지 로드 시점에 한 번 실행 (이전에 업로드한 정산 데이터 자동 반영)
+try{mergeSettlementsToMonthly();}catch(e){console.warn('settle merge failed',e);}
 
 tabs.clientMgmt=function(){
   const clients=cmLoad();
