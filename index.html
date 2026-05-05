@@ -289,6 +289,10 @@ overview(){
       <input type="file" id="mainFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleSettleUpload(this.files[0])">
     </div>
     <div id="mainUploadResult" style="flex:0 0 auto;display:flex;align-items:center"></div>
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:6px;justify-content:center">
+      <button onclick="filterSettleByMD()" class="btn" style="background:var(--orange);color:#fff;font-size:11px;padding:6px 10px;white-space:nowrap" title="다른 MD 데이터 잘못 올렸을 때 사용">🔍 내 MD만 유지</button>
+      <button onclick="clearSettleData()" class="btn" style="background:var(--red);color:#fff;font-size:11px;padding:6px 10px;white-space:nowrap" title="모든 정산 업로드 데이터 삭제">🗑 전체 초기화</button>
+    </div>
   </div>
   <div class="kpi-row">
     <div class="kpi"><div class="label">총 담당 거래처</div><div class="value">${camps.length}개</div><div class="change"><span class="tag tag-green">${ac}개 운영중</span></div></div>
@@ -1387,6 +1391,33 @@ window.mergeSettlementsToMonthly=function(){
 };
 // 페이지 로드 시점에 한 번 실행 (이전에 업로드한 정산 데이터 자동 반영)
 try{mergeSettlementsToMonthly();}catch(e){console.warn('settle merge failed',e);}
+
+// 잘못 업로드된 다른 MD 데이터 제거 - 본인(박해준 MD) 데이터만 유지
+window.filterSettleByMD=function(){
+  const myName=prompt('유지할 MD명을 입력하세요','박해준');
+  if(!myName)return;
+  const s=JSON.parse(localStorage.getItem('camfit_settlements')||'{}');
+  let removed=0,kept=0;
+  Object.keys(s).forEach(camp=>{
+    const before=s[camp].length;
+    s[camp]=s[camp].filter(i=>(i.md||'').includes(myName));
+    removed+=before-s[camp].length;
+    kept+=s[camp].length;
+    if(!s[camp].length)delete s[camp];
+  });
+  localStorage.setItem('camfit_settlements',JSON.stringify(s));
+  alert('✅ '+removed+'건 제거, '+kept+'건 유지\n페이지를 새로고침합니다.');
+  location.reload();
+};
+
+// 정산 업로드 데이터 전체 초기화
+window.clearSettleData=function(){
+  if(!confirm('모든 정산 업로드 데이터를 삭제하시겠습니까?\n(KPI는 원래 박혀있던 RAW 데이터로 돌아갑니다)'))return;
+  localStorage.removeItem('camfit_settlements');
+  localStorage.removeItem('settle_last_upload');
+  alert('✅ 정산 업로드 데이터가 모두 삭제되었습니다.\n페이지를 새로고침합니다.');
+  location.reload();
+};
 
 tabs.clientMgmt=function(){
   const clients=cmLoad();
