@@ -1349,9 +1349,43 @@ window.handleSettleUpload=function(file){
   reader.readAsArrayBuffer(file);
 };
 
+// 같은 캠핑장의 과거 RAW 데이터에서 RS수수료 비율(fmd/rmd/hmd ÷ pay)을 학습해
+// 새 월의 결제금액에 곱해서 RS수수료를 추정한다.
+// 과거 데이터가 없으면 0 반환.
+function estimateRSFees(campName, newPay){
+  if(!newPay||newPay<=0)return {fmd:0,rmd:0,hmd:0};
+  // RAW.monthly에서 이 캠핑장의 가장 최근 월(pay>0) 한 행 찾기
+  const past=RAW.monthly
+    .filter(r=>r[2]===campName && r[4]>0)
+    .sort((a,b)=>(b[0]*100+b[1])-(a[0]*100+a[1]));
+  if(past.length===0)return {fmd:0,rmd:0,hmd:0};
+  const ref=past[0]; // [y,m,n,cnt,pay,ref,set,bf,pf,pg,ptn,fmd,rmd,hmd]
+  const refPay=ref[4]||1;
+  return {
+    fmd:Math.round(newPay*(ref[11]||0)/refPay),
+    rmd:Math.round(newPay*(ref[12]||0)/refPay),
+    hmd:Math.round(newPay*(ref[13]||0)/refPay)
+  };
+}
+
+// D.monthly를 캠핑장+연도 단위로 다시 집계해서 D.yearly 재구성
+function rebuildYearlyFromMonthly(){
+  const map={};
+  D.monthly.forEach(r=>{
+    const k=r.y+'|'+r.n;
+    if(!map[k])map[k]={y:r.y,n:r.n,cnt:0,pay:0,ref:0,set:0,bf:0,pf:0,pg:0,ptn:0,fmd:0,rmd:0,hmd:0};
+    const o=map[k];
+    o.cnt+=r.cnt||0; o.pay+=r.pay||0; o.ref+=r.ref||0; o.set+=r.set||0;
+    o.bf+=r.bf||0; o.pf+=r.pf||0; o.pg+=r.pg||0; o.ptn+=r.ptn||0;
+    o.fmd+=r.fmd||0; o.rmd+=r.rmd||0; o.hmd+=r.hmd||0;
+  });
+  D.yearly=Object.values(map);
+}
+
 // 누적된 정산 데이터를 월별로 집계해 D.monthly에 머지
 // - 같은 캠핑장+연+월 항목이 있으면 정산 데이터로 덮어씀 (cnt/pay/ref/set/bf/pf/pg/ptn)
-// - fmd/rmd/hmd(MD수수료)는 정산 엑셀에 없으므로 기존 RAW 값 보존
+// - RS수수료(fmd/rmd/hmd)는 정산 엑셀에 없으므로 과거 RAW 비율로 추정
+// - 머지 후 D.yearly 재구성
 window.mergeSettlementsToMonthly=function(){
   const settlements=csLoad();
   if(!settlements||Object.keys(settlements).length===0)return;
@@ -1378,16 +1412,18 @@ window.mergeSettlementsToMonthly=function(){
       r.ptn+=s.ptn||0;
     });
   });
-  // D.monthly에 머지 (덮어쓰기/추가)
+  // D.monthly에 머지 (덮어쓰기/추가) + RS수수료 추정
   Object.values(byMonth).forEach(r=>{
+    const rs=estimateRSFees(r.n,r.pay);
     const idx=D.monthly.findIndex(x=>x.n===r.n&&x.y===r.y&&x.m===r.m);
     if(idx>=0){
-      const old=D.monthly[idx];
-      D.monthly[idx]={...r, fmd:old.fmd||0, rmd:old.rmd||0, hmd:old.hmd||0};
+      D.monthly[idx]={...r, ...rs};
     }else{
-      D.monthly.push({...r, fmd:0, rmd:0, hmd:0});
+      D.monthly.push({...r, ...rs});
     }
   });
+  // 연간 집계 재구성 (yearly 기반 분석들도 갱신)
+  rebuildYearlyFromMonthly();
 };
 // 페이지 로드 시점에 한 번 실행 (이전에 업로드한 정산 데이터 자동 반영)
 try{mergeSettlementsToMonthly();}catch(e){console.warn('settle merge failed',e);}
