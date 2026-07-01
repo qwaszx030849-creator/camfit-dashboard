@@ -531,6 +531,7 @@ newsletter(){
 // === 거래처 지도 ===
 let selectedMapClient='',clientMapInstance=null,mapClusterer=null,mapInfoWindow=null;
 const mapMarkers=new Map(),mapPending=new Set(),MAP_COORD_KEY='camfit_map_coords_v1';
+let mapBoundsTimer=null;
 let mapCoordCache={};
 try{mapCoordCache=JSON.parse(localStorage.getItem(MAP_COORD_KEY)||'{}')}catch(e){mapCoordCache={}}
 function escMap(value){return String(value||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
@@ -538,13 +539,19 @@ function mapFilteredClients(){
   const q=(document.getElementById('mapSearch')?.value||'').trim().toLowerCase();
   const type=document.getElementById('mapType')?.value||'';
   const status=document.getElementById('mapStatus')?.value||'';
-  return D.camps.filter(c=>(!q||(c.n+' '+c.a).toLowerCase().includes(q))&&(!type||c.ct===type)&&(!status||c.s===status));
+  const bounds=clientMapInstance?.getBounds();
+  return D.camps.filter(c=>{
+    const coords=mapCoordCache[c.a];
+    const inView=!bounds||(coords&&bounds.contain(new kakao.maps.LatLng(coords.lat,coords.lng)));
+    return inView&&(!q||(c.n+' '+c.a).toLowerCase().includes(q))&&(!type||c.ct===type)&&(!status||c.s===status);
+  });
 }
 function renderClientMapList(){
   const list=mapFilteredClients();
   const box=document.getElementById('mapClientList');
   if(!box)return;
-  document.getElementById('mapCount').textContent=list.length.toLocaleString()+'개';
+  const located=list.filter(c=>mapCoordCache[c.a]).length;
+  document.getElementById('mapCount').textContent=located.toLocaleString()+'개';
   box.innerHTML=list.map((c,i)=>`<div class="map-client ${c.l===selectedMapClient?'active':''}" onclick="selectMapClient(${i})"><a class="map-client-name" href="${escMap(c.l)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escMap(c.n)} ↗</a><div class="map-client-address">${escMap(c.a)}</div><div style="margin-top:6px"><span class="tag ${c.s==='운영중'?'tag-green':'tag-orange'}">${escMap(c.s)}</span> <span class="tag tag-blue">${escMap(c.ct||'거래처')}</span></div></div>`).join('')||'<div style="padding:30px;text-align:center;color:var(--text2)">검색 결과가 없습니다.</div>';
   window.__mapClients=list;
   refreshMapMarkers();
@@ -592,8 +599,8 @@ async function geocodeAllClients(){
   const update=()=>{const el=document.getElementById('mapSelected');if(el&&!selectedMapClient)el.innerHTML=`<div class="map-selected-info"><strong>대한민국 전체 거래처</strong><span>위치 불러오는 중 ${completed.toLocaleString()} / ${D.camps.length.toLocaleString()}${failed?' · 주소 확인 필요 '+failed:''}</span></div>`};
   D.camps.filter(c=>mapCoordCache[c.a]).forEach(c=>addMapMarker(c,mapCoordCache[c.a]));refreshMapMarkers();update();
   let cursor=0;
-  async function worker(){while(cursor<missing.length){const c=missing[cursor++];if(await geocodeClient(c))completed++;else failed++;if((completed+failed)%20===0)update();await new Promise(r=>setTimeout(r,80))}}
-  await Promise.all(Array.from({length:4},worker));saveMapCoords();refreshMapMarkers();update();
+  async function worker(){while(cursor<missing.length){const c=missing[cursor++];if(await geocodeClient(c))completed++;else failed++;if((completed+failed)%20===0){update();renderClientMapList()}await new Promise(r=>setTimeout(r,80))}}
+  await Promise.all(Array.from({length:4},worker));saveMapCoords();renderClientMapList();update();
 }
 function selectMapClient(index){
   const c=(window.__mapClients||[])[index];
@@ -609,6 +616,10 @@ function initClientMap(){
     clientMapInstance=new kakao.maps.Map(document.getElementById('mapFrame'),{center:new kakao.maps.LatLng(36.25,127.85),level:13});
     mapClusterer=new kakao.maps.MarkerClusterer({map:clientMapInstance,averageCenter:true,minLevel:7});
     mapInfoWindow=new kakao.maps.InfoWindow({removable:true});
+    kakao.maps.event.addListener(clientMapInstance,'idle',()=>{
+      clearTimeout(mapBoundsTimer);
+      mapBoundsTimer=setTimeout(renderClientMapList,120);
+    });
     renderClientMapList();
     geocodeAllClients();
   };
