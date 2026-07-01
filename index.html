@@ -2043,11 +2043,12 @@ const FIREBASE_CONFIG={apiKey:"AIzaSyCYgW8EChdGyrdVPTxxF-engXGcWIVuGgg",authDoma
 const ADMIN_EMAIL='qwaszx030849@gmail.com';
 firebase.initializeApp(FIREBASE_CONFIG);
 const secureAuth=firebase.auth(),secureDb=firebase.firestore();
+const secureAuthReady=secureAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 let secureUser=null,secureUid='guest';
 
 window.secureGoogleLogin=async function(){
   document.getElementById('authError').textContent='';
-  try{await secureAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider())}catch(e){document.getElementById('authError').textContent='로그인에 실패했습니다: '+e.message}
+  try{await secureAuthReady;await secureAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider())}catch(e){document.getElementById('authError').textContent='로그인에 실패했습니다: '+e.message}
 };
 window.secureLogout=()=>secureAuth.signOut();
 
@@ -2105,7 +2106,7 @@ async function secureImportFiles(files){
   await saveSecurePayload(result);applySecurePayload(result);document.getElementById('totalCamps').textContent=activeCamps().length;renderTab('overview');alert('내 대시보드 데이터 저장 완료');
 }
 
-secureAuth.onAuthStateChanged(async user=>{
+secureAuthReady.then(()=>secureAuth.onAuthStateChanged(async user=>{
   if(!user){secureUser=null;secureUid='guest';document.body.classList.add('auth-locked');document.getElementById('authScreen').style.display='flex';return}
   try{
     if(!await isSecureUserAllowed(user)){document.getElementById('authError').textContent='승인되지 않은 이메일입니다. 관리자에게 문의하세요.';await secureAuth.signOut();return}
@@ -2113,7 +2114,7 @@ secureAuth.onAuthStateChanged(async user=>{
     const payload=await loadSecurePayload(user.uid);applySecurePayload(payload);document.body.classList.remove('auth-locked');document.getElementById('authScreen').style.display='none';document.getElementById('totalCamps').textContent=activeCamps().length;renderTab('overview');
     if(!payload)setTimeout(()=>alert('저장된 데이터가 없습니다. 우측 상단 “내 데이터 가져오기”에서 캠핑장·숙소·정산 엑셀을 선택해 주세요.'),200);
   }catch(e){document.getElementById('authError').textContent='데이터를 불러오지 못했습니다: '+e.message}
-});
+})).catch(e=>{document.getElementById('authError').textContent='자동 로그인 설정에 실패했습니다: '+e.message});
 </script>
 </body>
 </html>
