@@ -124,9 +124,7 @@ th.sortable .arr-up,th.sortable .arr-down{display:block}
   <button data-tab="yoy">전년대비 분석</button>
   <button data-tab="mom">전년동월대비</button>
   <button data-tab="decline">매출감소 업체</button>
-  <button data-tab="message">개인화 메시지</button>
   <button data-tab="mktTarget">마케팅 타겟</button>
-  <button data-tab="reportGen">리포트 생성</button>
   <button data-tab="clientMgmt">고객 관리</button>
   <button data-tab="market">시장 동향</button>
   <button data-tab="camps">거래처 목록</button>
@@ -730,9 +728,7 @@ function renderTab(name){
   if(name==='yoy')renderYoY();
   if(name==='mom')renderMoM();
   if(name==='decline')renderDecline();
-  if(name==='message')renderMessages();
   if(name==='mktTarget')renderMktTarget();
-  if(name==='reportGen')initReportGen();
   if(name==='clientMgmt')renderClientMgmt();
   if(name==='market')renderMarketCharts();
   if(name==='camps')initCampList();
