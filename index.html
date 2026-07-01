@@ -328,14 +328,19 @@ overview(){
       <select id="onlineRsRate" onchange="renderOnlineRS()">
         <option value="all">전체 등락률</option><option value="new">신규 (이전 0원)</option><option value="up100">+100% 이상</option><option value="up50">+50% ~ +100%</option><option value="up10">+10% ~ +50%</option><option value="up0">0% ~ +10%</option><option value="down10">-10% ~ 0%</option><option value="down50">-50% ~ -10%</option><option value="down100">-100% ~ -50%</option>
       </select>
-      <select id="onlineRsSort" onchange="renderOnlineRS()"><option value="cur">RS 금액순</option><option value="rate">등락률순</option><option value="name">업체명순</option><option value="plan">플랜명순</option></select>
+      <select id="onlineRsSort" onchange="renderOnlineRS()"><option value="cur">현재 RS순</option><option value="prev">이전 RS순</option><option value="diff">증감액순</option><option value="rate">등락률순</option><option value="name">업체명순</option><option value="plan">플랜명순</option></select>
       <button class="btn btn-primary" id="onlineRsAsc" onclick="setOnlineRsDir('asc')">↑ 오름차순</button>
       <button class="btn" id="onlineRsDesc" onclick="setOnlineRsDir('desc')" style="background:var(--card2);color:var(--text)">↓ 내림차순</button>
       <span id="onlineRsCount" style="color:var(--text2);font-size:12px;margin-left:auto"></span>
     </div>
     <div class="kpi-row" id="onlineRsKpi"></div>
     <div class="scroll-table rs-table" style="max-height:520px"><table><thead><tr>
-      <th style="text-align:left">업체명</th><th style="text-align:left">업체 플랜명</th><th id="onlineRsPrevHead">이전 RS</th><th id="onlineRsCurHead">현재 RS</th><th>증감액</th><th>등락률</th>
+      <th class="sortable" data-online-sort="name" onclick="sortOnlineRsColumn('name')" style="text-align:left">업체명<span class="sort-arrows"><span class="arr-up">▲</span><span class="arr-down">▼</span></span></th>
+      <th class="sortable" data-online-sort="plan" onclick="sortOnlineRsColumn('plan')" style="text-align:left">업체 플랜명<span class="sort-arrows"><span class="arr-up">▲</span><span class="arr-down">▼</span></span></th>
+      <th class="sortable" data-online-sort="prev" onclick="sortOnlineRsColumn('prev')"><span id="onlineRsPrevHead">이전 RS</span><span class="sort-arrows"><span class="arr-up">▲</span><span class="arr-down">▼</span></span></th>
+      <th class="sortable" data-online-sort="cur" onclick="sortOnlineRsColumn('cur')"><span id="onlineRsCurHead">현재 RS</span><span class="sort-arrows"><span class="arr-up">▲</span><span class="arr-down">▼</span></span></th>
+      <th class="sortable" data-online-sort="diff" onclick="sortOnlineRsColumn('diff')">증감액<span class="sort-arrows"><span class="arr-up">▲</span><span class="arr-down">▼</span></span></th>
+      <th class="sortable" data-online-sort="rate" onclick="sortOnlineRsColumn('rate')">등락률<span class="sort-arrows"><span class="arr-up">▲</span><span class="arr-down">▼</span></span></th>
     </tr></thead><tbody id="onlineRsBody"></tbody></table></div>
   </div>
   <div class="panel"><h3><span class="icon" style="background:var(--accent2)"></span>매출 / 예상 RS 수수료 상세</h3>
@@ -575,6 +580,12 @@ function onlineRsRateMatch(rate,filter,isNew){
   return filter==='up100'?rate>=100:filter==='up50'?rate>=50&&rate<100:filter==='up10'?rate>=10&&rate<50:filter==='up0'?rate>=0&&rate<10:filter==='down10'?rate>=-10&&rate<0:filter==='down50'?rate>=-50&&rate<-10:filter==='down100'?rate>=-100&&rate<-50:true;
 }
 function setOnlineRsDir(dir){onlineRsDir=dir;renderOnlineRS()}
+function sortOnlineRsColumn(field){
+  const select=document.getElementById('onlineRsSort');
+  if(select.value===field)onlineRsDir=onlineRsDir==='asc'?'desc':'asc';
+  else{select.value=field;onlineRsDir=(field==='name'||field==='plan')?'asc':'desc'}
+  renderOnlineRS();
+}
 function renderOnlineRS(){
   const type=document.getElementById('onlineRsType')?.value||'month',period=document.getElementById('onlineRsPeriod')?.value;
   if(!period)return;
@@ -584,9 +595,10 @@ function renderOnlineRS(){
   let rows=[...names].map(name=>{const c=curMap[name]||{name,plan:prevMap[name]?.plan||'-',rs:0},p=prevMap[name]?.rs||0,rate=p?((c.rs-p)/p*100):(c.rs>0?null:0);return{name,plan:c.plan,cur:c.rs,prev:p,diff:c.rs-p,rate,isNew:p===0&&c.rs>0}})
     .filter(r=>(!q||(r.name+' '+r.plan).toLowerCase().includes(q))&&onlineRsRateMatch(r.rate,rateFilter,r.isNew));
   const dir=onlineRsDir==='asc'?1:-1;
-  rows.sort((a,b)=>{const av=sort==='name'?a.name:sort==='plan'?a.plan:sort==='rate'?(a.rate??999999):a.cur,bv=sort==='name'?b.name:sort==='plan'?b.plan:sort==='rate'?(b.rate??999999):b.cur;return typeof av==='string'?av.localeCompare(bv,'ko')*dir:(av-bv)*dir});
+  rows.sort((a,b)=>{const av=sort==='name'?a.name:sort==='plan'?a.plan:sort==='rate'?(a.rate??999999):sort==='prev'?a.prev:sort==='diff'?a.diff:a.cur,bv=sort==='name'?b.name:sort==='plan'?b.plan:sort==='rate'?(b.rate??999999):sort==='prev'?b.prev:sort==='diff'?b.diff:b.cur;return typeof av==='string'?av.localeCompare(bv,'ko')*dir:(av-bv)*dir});
   const curTotal=Object.values(curMap).reduce((s,r)=>s+r.rs,0),prevTotal=Object.values(prevMap).reduce((s,r)=>s+r.rs,0),totalRate=prevTotal?((curTotal-prevTotal)/prevTotal*100):null;
   document.getElementById('onlineRsAsc').style.opacity=onlineRsDir==='asc'?'1':'.55';document.getElementById('onlineRsDesc').style.opacity=onlineRsDir==='desc'?'1':'.55';
+  document.querySelectorAll('[data-online-sort]').forEach(th=>{th.classList.remove('asc','desc');if(th.dataset.onlineSort===sort)th.classList.add(onlineRsDir)});
   document.getElementById('onlineRsCount').textContent=rows.length.toLocaleString()+'개 업체';
   document.getElementById('onlineRsPrevHead').textContent=onlineRsLabel(prev,type)+' RS';document.getElementById('onlineRsCurHead').textContent=onlineRsLabel(period,type)+' RS';
   document.getElementById('onlineRsKpi').innerHTML=`<div class="kpi"><div class="label">${onlineRsLabel(period,type)} 온라인 RS</div><div class="value">${fmt(curTotal)}</div></div><div class="kpi"><div class="label">${onlineRsLabel(prev,type)} 온라인 RS</div><div class="value">${fmt(prevTotal)}</div></div><div class="kpi"><div class="label">이전 대비 등락률</div><div class="value ${totalRate!==null&&totalRate>=0?'up':'down'}">${totalRate===null?'신규':(totalRate>=0?'▲':'▼')+Math.abs(totalRate).toFixed(1)+'%'}</div></div><div class="kpi"><div class="label">RS 발생 업체</div><div class="value">${Object.values(curMap).filter(r=>r.rs!==0).length}개</div></div>`;
