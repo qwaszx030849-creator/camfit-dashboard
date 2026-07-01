@@ -2095,9 +2095,11 @@ window.showDataImport=function(){
 };
 async function secureImportFiles(files){
   if(!files.length)return;
-  const result={raw:{camps:[],monthly:[],yearly:[],mkt_m:[],mkt_y:[],targets:[],md:[[secureUser.displayName||secureUser.email,0]]},onlineRS:[]};
+  let result=JSON.parse(JSON.stringify({raw:RAW,onlineRS:ONLINE_RS}));
+  if(!result.raw)result={raw:{camps:[],monthly:[],yearly:[],mkt_m:[],mkt_y:[],targets:[],md:[[secureUser.displayName||secureUser.email,0]]},onlineRS:[]};
+  result.raw.camps=result.raw.camps||[];result.raw.monthly=result.raw.monthly||[];result.onlineRS=result.onlineRS||[];
   for(const file of files){
-    if(file.name.toLowerCase().endsWith('.json')){const parsed=JSON.parse(await file.text());Object.assign(result,parsed);continue}
+    if(file.name.toLowerCase().endsWith('.json')){result=JSON.parse(await file.text());continue}
     const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});if(rows.length<2)continue;
     const h=rows[0].map(v=>String(v).trim()),idx=n=>h.indexOf(n);
     if(idx('고유ID')>=0){
@@ -2107,6 +2109,9 @@ async function secureImportFiles(files){
       const agg={};rows.slice(1).forEach(r=>{const name=String(r[idx('현재 캠핑장 명')]||'').trim(),date=String(r[idx('정산일')]||''),dm=date.match(/(\d{4})\.(\d{1,2})\./);if(!name||!dm)return;const vals=[Number(r[idx('정산 대상 건수')])||0,Number(r[idx('결제금액')])||0,Number(r[idx('환불금액')])||0,Number(r[idx('정산 지급 금액')])||0,Number(r[idx('기본 수수료')])||0,Number(r[idx('플랜 수수료')])||0,Number(r[idx('PG 수수료')])||0,Number(r[idx('파트너 수수료')])||0,Number(r[idx('고정 MD 수수료(정액)')])||0,Number(r[idx('MD 플랜 수수료(매출 비례)')])||0,Number(r[idx('헤드 MD 커미션')])||0],key=dm[1]+'|'+dm[2]+'|'+name;if(!agg[key])agg[key]=[Number(dm[1]),Number(dm[2]),name,0,0,0,0,0,0,0,0,0,0,0];vals.forEach((v,i)=>agg[key][i+3]+=v);result.onlineRS.push([String(r[idx('정산 차수')]||''),date,name,String(r[idx('현재 플랜 명')]||''),vals[9]]);});result.raw.monthly.push(...Object.values(agg));
     }
   }
+  result.raw.camps=[...new Map(result.raw.camps.map(c=>[(c.l||c.n),c])).values()];
+  result.raw.monthly=[...new Map(result.raw.monthly.map(r=>[r[0]+'|'+r[1]+'|'+r[2],r])).values()];
+  result.onlineRS=[...new Map(result.onlineRS.map(r=>[r[0]+'|'+r[2],r])).values()];
   const yearAgg={};result.raw.monthly.forEach(r=>{const k=r[0]+'|'+r[2];if(!yearAgg[k])yearAgg[k]=[r[0],r[2],0,0,0,0,0,0,0,0,0,0,0];for(let i=2;i<=12;i++)yearAgg[k][i]+=r[i+1]||0});result.raw.yearly=Object.values(yearAgg);
   await saveSecurePayload(result);applySecurePayload(result);document.getElementById('totalCamps').textContent=activeCamps().length;renderTab('overview');alert('내 대시보드 데이터 저장 완료');
 }
