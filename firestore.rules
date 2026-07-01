@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && request.auth.token.email == 'qwaszx030849@gmail.com'; }
+    function isApproved() {
+      return signedIn() && (
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/approvedEmails/$(request.auth.token.email)) &&
+         get(/databases/$(database)/documents/approvedEmails/$(request.auth.token.email)).data.enabled == true)
+      );
+    }
+
+    match /approvedEmails/{email} {
+      allow get: if signedIn() && (isAdmin() || request.auth.token.email == email);
+      allow list, create, update, delete: if isAdmin();
+    }
+
+    match /users/{userId}/{document=**} {
+      allow read, write: if isApproved() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}
