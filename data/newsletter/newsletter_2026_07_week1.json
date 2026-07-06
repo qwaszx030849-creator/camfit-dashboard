@@ -1,0 +1,106 @@
+{
+    "id":  "2026-07-week1",
+    "title":  "🏕️ 캠핑장 운영 인사이트 노트 - 2026년 7월 1주차",
+    "week_info":  {
+                      "year":  2026,
+                      "month":  7,
+                      "week":  28,
+                      "week_of_month":  1,
+                      "date":  "2026-07-06",
+                      "display":  "2026년 7월 1주차"
+                  },
+    "created_at":  "2026-07-06T12:21:22.2947035+09:00",
+    "items":  [
+                  {
+                      "title":  "이번 주 비와 더위를 한 장으로 관리하는 운영 판단표",
+                      "url":  "https://www.weather.go.kr/w/forecast/overall/mid-term.do",
+                      "source":  "기상청 날씨누리",
+                      "summary":  "이번 주에는 중부지방 비와 평년보다 높은 기온이 함께 예보돼 있습니다. 매일 오전 예보를 확인해 정상 운영·주의 운영·신규 입실 중단의 세 단계로 판단하고, 단계별로 고객 안내 시각과 담당자를 정해두는 방식이 유효합니다. 강수 시점은 바뀔 수 있으므로 주간예보만 믿지 말고 입실 전날과 당일에 다시 확인해야 합니다.",
+                      "published_date":  "2026-07-05",
+                      "category":  "시즌운영",
+                      "score":  10.0
+                  },
+                  {
+                      "title":  "장마철에는 매출보다 먼저 폐쇄 기준을 숫자로 정해야 합니다",
+                      "url":  "https://www.mois.go.kr/frt/bbs/type002/commonSelectBoardArticle.do%3Bjsessionid%3DEMhJ7fSiuBHfmfTELw3ALxqa.node10?bbsId=BBSMSTR_000000000205\u0026nttId=92839",
+                      "source":  "행정안전부",
+                      "summary":  "하천·계곡 범람 뒤 대피를 시작하면 늦습니다. 강우량, 수위, 기상특보 중 무엇을 기준으로 계곡 인접 사이트와 저지대 사이트를 먼저 막을지 사전에 정하고, 폐쇄 대상 사이트·차량 이동 위치·환불 또는 일정 변경 원칙을 한 문서로 묶어두세요. 현장 직원마다 판단이 달라지는 문제를 줄이는 것이 핵심입니다.",
+                      "published_date":  null,
+                      "category":  "리스크관리",
+                      "score":  10.0
+                  },
+                  {
+                      "title":  "비 오기 전 30분, 배수로보다 먼저 확인할 다섯 곳",
+                      "url":  "https://www.mois.go.kr/frt/bbs/type010/commonSelectBoardArticle.do?bbsId=BBSMSTR_000000000008\u0026nttId=70127",
+                      "source":  "행정안전부",
+                      "summary":  "집중호우 전에는 배수구와 측구뿐 아니라 저지대 사이트, 사면 아래 사이트, 전기 분전함 주변, 대피로 장애물, 차량 출구를 함께 점검해야 합니다. 점검 결과를 사진으로 남기고 미조치 항목에는 담당자와 완료 시각을 붙이면 경험 많은 운영자에게도 반복 누락을 줄이는 실무 도구가 됩니다.",
+                      "published_date":  null,
+                      "category":  "시설안전",
+                      "score":  9.5
+                  },
+                  {
+                      "title":  "폭우 안내 문자는 길게 설명하지 말고 행동 순서만 보내세요",
+                      "url":  "https://www.mois.go.kr/frt/bbs/type002/commonSelectBoardArticle.do%3Bjsessionid%3DEMhJ7fSiuBHfmfTELw3ALxqa.node10?bbsId=BBSMSTR_000000000205\u0026nttId=92839",
+                      "source":  "행정안전부",
+                      "summary":  "고객 안내는 현재 상황, 즉시 해야 할 행동, 이동 장소, 재안내 시각, 연락처 순으로 표준화하는 편이 좋습니다. 예약자 전체 공지와 현장 방송의 문구를 통일하고 야간에는 사이트별 확인 담당을 두세요. 대피 안내를 받았는지 회신하게 하면 누락 고객을 빠르게 찾을 수 있습니다.",
+                      "published_date":  null,
+                      "category":  "고객관리",
+                      "score":  9.0
+                  },
+                  {
+                      "title":  "폭염 운영은 고객 서비스와 직원 근무표를 같이 바꿔야 합니다",
+                      "url":  "https://health.kdca.go.kr/healthinfo/biz/health/ntcnInfo/healthSourc/thtimtCntnts/thtimtCntntsView.do?thtimt_cntnts_sn=122",
+                      "source":  "질병관리청",
+                      "summary":  "폭염특보 때는 체크인 동선을 그늘로 옮기고 식수·휴식 공간을 눈에 띄게 배치하세요. 예초, 청소, 시설 보수는 가장 더운 시간을 피하고 직원에게 1시간마다 10~15분 휴식을 보장하는 운영표가 필요합니다. 어지럼, 근육경련, 의식 저하 발생 시 냉방 공간 이동과 119 신고 기준도 근무자 모두가 알아야 합니다.",
+                      "published_date":  "2025-07",
+                      "category":  "시즌운영",
+                      "score":  9.5
+                  },
+                  {
+                      "title":  "수영장은 시설보다 감시 공백을 없애는 운영이 먼저입니다",
+                      "url":  "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=1747",
+                      "source":  "질병관리청",
+                      "summary":  "물놀이 사고는 7~8월에 집중됩니다. 운영시간, 보호자 동반 원칙, 음주 후 입수 금지, 연령·수심별 구명조끼 기준을 입구와 예약 안내에 함께 고지하세요. 구조 튜브·밧줄·막대기 위치와 119 신고 담당을 정하고 교대 시간에도 감시자가 비지 않도록 인수인계 절차를 두는 것이 중요합니다.",
+                      "published_date":  "2026-06-04",
+                      "category":  "물놀이안전",
+                      "score":  10.0
+                  },
+                  {
+                      "title":  "캠핑장 판매 식재료는 냉장고 온도 기록부터 남기세요",
+                      "url":  "https://www.foodsafetykorea.go.kr/portalmobile/content/detail.do?bbs_no=bbs427\u0026ntctxt_no=1069308",
+                      "source":  "식품안전나라",
+                      "summary":  "세트 고기와 조식 재료를 판매한다면 입고·보관·제공 단계의 온도 기록이 기본입니다. 찬 음식은 4도 이하, 가열식품은 중심부 74도 이상 1분을 기준으로 관리하고 냉장고 온도를 정해진 시간에 기록하세요. 표시사항과 거래명세서를 보관하면 위생 점검뿐 아니라 고객 문의에도 근거 있게 대응할 수 있습니다.",
+                      "published_date":  null,
+                      "category":  "위생관리",
+                      "score":  9.5
+                  },
+                  {
+                      "title":  "장마철 공용 주방은 교차오염과 상온 방치가 동시에 늘어납니다",
+                      "url":  "https://www.mfds.go.kr/brd/m_827/view.do?seq=3609\u0026sz=64",
+                      "source":  "식품의약품안전처",
+                      "summary":  "습하고 더운 날에는 칼·도마 구분, 세척 후 즉시 냉장, 주문 후 조리 원칙을 평소보다 엄격히 적용해야 합니다. 공용 개수대에는 생고기 손질 구역을 분리 표시하고 행주·수세미 교체 주기와 냉장고 청소 시간을 게시하세요. 고객용 안내보다 직원 점검표와 실제 교체 기록이 먼저입니다.",
+                      "published_date":  "2022-07-07",
+                      "category":  "위생관리",
+                      "score":  9.0
+                  },
+                  {
+                      "title":  "반려견 캠핑 후기에서 보인 재방문 요소: 펜스와 산책 동선",
+                      "url":  "https://blog.naver.com/dekiru90/224332280240",
+                      "source":  "캠퍼 후기",
+                      "summary":  "후기에서 긍정적으로 언급된 요소는 개별 펜스와 사이트 옆 산책로였습니다. 반려견 동반 고객에게는 시설 수보다 목줄을 풀 수 있는 범위, 다른 사이트와 마주치는 횟수, 배변 처리 위치가 체감 품질을 좌우합니다. 펜스 높이·하단 틈·출입문 잠금과 야간 조명을 함께 점검할 가치가 있습니다.",
+                      "published_date":  "2026-06-30",
+                      "category":  "후기인사이트",
+                      "score":  8.5
+                  },
+                  {
+                      "title":  "가족 캠핑 후기에서 보인 기본기의 힘: 간격·화장실·샤워실",
+                      "url":  "https://blog.naver.com/jjjyy289/224336985224",
+                      "source":  "캠퍼 후기",
+                      "summary":  "아이 동반 후기에서는 넓은 사이트 간격과 깨끗한 화장실·샤워실이 첫인상으로 언급됐습니다. 여름 성수기에는 청소 횟수 자체보다 혼잡 시간 직후 상태 회복 속도를 관리하세요. 시간대별 점검표와 소모품 보충 기록을 두고, 젖은 바닥과 배수 냄새를 우선 처리하면 후기에서 반복되는 불만을 줄일 수 있습니다.",
+                      "published_date":  "2026-07-05",
+                      "category":  "후기인사이트",
+                      "score":  9.0
+                  }
+              ],
+    "items_count":  10
+}
