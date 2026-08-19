@@ -575,7 +575,8 @@ newsletter(){
 
 // === 온라인 RS 분석 ===
 let onlineRsDir='desc';
-function onlineRsMonthKey(date){const s=normalizeSettleDate(date);const m=String(s||date||'').match(/(\d{4})[.\-\/년\s]+(\d{1,2})/);return m?m[1]+'-'+String(m[2]).padStart(2,'0'):''}
+function isValidDashboardYearMonth(y,m){y=Number(y);m=Number(m);return y>=2000&&y<=2100&&m>=1&&m<=12}
+function onlineRsMonthKey(date){const s=normalizeSettleDate(date);const m=String(s||date||'').match(/(\d{4})[.\-\/년\s]+(\d{1,2})/);if(!m||!isValidDashboardYearMonth(m[1],m[2]))return '';return m[1]+'-'+String(m[2]).padStart(2,'0')}
 function onlineRsWeekSort(label){const m=String(label||'').match(/(\d{4})년\s*(\d+)월\s*(\d+)주차/);return m?Number(m[1])*10000+Number(m[2])*100+Number(m[3]):0}
 function onlineRsPeriods(type){
   const values=[...new Set(ONLINE_RS.map(r=>type==='month'?onlineRsMonthKey(r[1]):r[0]).filter(Boolean))];
@@ -1553,6 +1554,7 @@ function normalizeSettleDate(v){
   const s=String(v||'').trim();
   const m=s.match(/(\d{4})[^0-9]?(\d{1,2})[^0-9]?(\d{1,2})?/);
   if(!m)return s;
+  if(!isValidDashboardYearMonth(m[1],m[2]))return '';
   return m[1]+'.'+String(m[2]).padStart(2,'0')+'.'+String(m[3]||'1').padStart(2,'0');
 }
 function getCellByHeaders(row,headers,names,fallbackIndex){
@@ -1679,9 +1681,9 @@ function rebuildOnlineRSFromSettlements(){
       generated.push([String(s.period||''),normalizeSettleDate(s.date||''),campName,String(s.plan||''),onlineRs]);
     });
   });
-  const generatedKeys=new Set(generated.map(r=>String(r[0])+'|'+String(r[2])));
-  const existing=(ONLINE_RS||[]).filter(r=>!generatedKeys.has(String(r[0])+'|'+String(r[2])));
-  ONLINE_RS=[...existing,...generated].filter(r=>r[0]&&r[2]);
+  const generatedKeys=new Set(generated.map(onlineRsRowKey));
+  const existing=(ONLINE_RS||[]).filter(r=>!generatedKeys.has(onlineRsRowKey(r)));
+  ONLINE_RS=[...existing,...generated].filter(r=>r[0]&&r[2]&&onlineRsMonthKey(r[1]));
 }
 
 function buildMktTargetsFromCurrentData(){
@@ -2349,7 +2351,7 @@ async function secureImportFiles(files){
   }
   result.raw.camps=[...new Map(result.raw.camps.map(c=>[(c.l||c.n),c])).values()];
   result.raw.monthly=[...new Map(result.raw.monthly.map(r=>[r[0]+'|'+r[1]+'|'+r[2],r])).values()];
-  result.onlineRS=[...new Map(result.onlineRS.map(r=>[onlineRsRowKey(r),r])).values()];
+  result.onlineRS=[...new Map(result.onlineRS.filter(r=>onlineRsMonthKey(r[1])).map(r=>[onlineRsRowKey(r),r])).values()];
   const yearAgg={};result.raw.monthly.forEach(r=>{const k=r[0]+'|'+r[2];if(!yearAgg[k])yearAgg[k]=[r[0],r[2],0,0,0,0,0,0,0,0,0,0,0];for(let i=2;i<=12;i++)yearAgg[k][i]+=r[i+1]||0});result.raw.yearly=Object.values(yearAgg);
   await saveSecurePayload(result);applySecurePayload(result);document.getElementById('totalCamps').textContent=activeCamps().length;renderTab('overview');alert('내 대시보드 데이터 저장 완료');
 }
