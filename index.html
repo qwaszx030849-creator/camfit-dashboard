@@ -575,7 +575,7 @@ newsletter(){
 
 // === 온라인 RS 분석 ===
 let onlineRsDir='desc';
-function onlineRsMonthKey(date){const m=String(date||'').match(/(\d{4})\.(\d{1,2})\./);return m?m[1]+'-'+String(m[2]).padStart(2,'0'):''}
+function onlineRsMonthKey(date){const s=normalizeSettleDate(date);const m=String(s||date||'').match(/(\d{4})[.\-\/년\s]+(\d{1,2})/);return m?m[1]+'-'+String(m[2]).padStart(2,'0'):''}
 function onlineRsWeekSort(label){const m=String(label||'').match(/(\d{4})년\s*(\d+)월\s*(\d+)주차/);return m?Number(m[1])*10000+Number(m[2])*100+Number(m[3]):0}
 function onlineRsPeriods(type){
   const values=[...new Set(ONLINE_RS.map(r=>type==='month'?onlineRsMonthKey(r[1]):r[0]).filter(Boolean))];
@@ -1520,6 +1520,46 @@ function csSave(obj){localStorage.setItem(CM_SETTLE_KEY+'_'+secureUid,JSON.strin
 // 5=환불금액, 6=쿠폰지원금액, 7=쿠폰할당금액, 8=사용포인트, 9=정산대상금액,
 // 10=온라인결제수수료, 11=기본수수료, 12=플랜수수료, 13=PG수수료, 14=파트너수수료,
 // 15=옵션사용수수료, 16=옵션중개수수료, 17=정산지급금액, 18=현재플랜명, 19=현재MD명, 20=정산일
+
+function normalizeHeaderName(v){return String(v||'').replace(/\s+/g,'').trim()}
+function headerIndex(headers,names){
+  const clean=headers.map(normalizeHeaderName);
+  for(const name of names){
+    const idx=clean.indexOf(normalizeHeaderName(name));
+    if(idx>=0)return idx;
+  }
+  for(const name of names){
+    const needle=normalizeHeaderName(name);
+    const idx=clean.findIndex(h=>h.includes(needle));
+    if(idx>=0)return idx;
+  }
+  return -1;
+}
+function moneyCell(v){
+  if(typeof v==='number')return v;
+  const n=Number(String(v||'').replace(/[^0-9.-]/g,''));
+  return Number.isFinite(n)?n:0;
+}
+function textCell(v){return String(v==null?'':v).trim()}
+function excelSerialToDateString(n){
+  if(typeof n!=='number'||n<20000||n>80000)return '';
+  const d=new Date(Math.round((n-25569)*86400*1000));
+  return d.getUTCFullYear()+'.'+String(d.getUTCMonth()+1).padStart(2,'0')+'.'+String(d.getUTCDate()).padStart(2,'0');
+}
+function normalizeSettleDate(v){
+  const serial=excelSerialToDateString(v);
+  if(serial)return serial;
+  const s=String(v||'').trim();
+  const m=s.match(/(\d{4})[^0-9]?(\d{1,2})[^0-9]?(\d{1,2})?/);
+  if(!m)return s;
+  return m[1]+'.'+String(m[2]).padStart(2,'0')+'.'+String(m[3]||'1').padStart(2,'0');
+}
+function getCellByHeaders(row,headers,names,fallbackIndex){
+  const idx=headerIndex(headers,names);
+  if(idx>=0)return row[idx];
+  return fallbackIndex>=0?row[fallbackIndex]:'';
+}
+
 window.handleSettleUpload=function(file){
   if(!file)return;
   const result=document.getElementById('mainUploadResult');
@@ -1535,33 +1575,39 @@ window.handleSettleUpload=function(file){
         return;
       }
       const settlements=csLoad();
-      let total=0, newCount=0, campSet=new Set(), periodSet=new Set();
+      const headers=(rows[0]||[]).map(v=>String(v||'').trim());
+      let total=0, newCount=0, updatedCount=0, campSet=new Set(), periodSet=new Set();
       for(let i=1;i<rows.length;i++){
         const row=rows[i];
-        if(!row||!row[0])continue;
+        if(!row||row.every(v=>v===''||v==null))continue;
+        const period=textCell(getCellByHeaders(row,headers,['정산 차수','정산차수','정산 주차','정산주차'],0));
+        const campName=textCell(getCellByHeaders(row,headers,['현재 캠핑장 명','현재 캠핑장명','사업자명','캠핑장명','업체명'],1));
+        if(!period&&!campName)continue;
         total++;
-        periodSet.add(String(row[0]));
-        const campName=String(row[1]||'').trim();
+        if(period)periodSet.add(period);
         if(!campName)continue;
         campSet.add(campName);
-        const cnt=parseInt(row[2])||0;
-        const pay=parseInt(row[3])||0;
-        const refund=parseInt(row[5])||0;
-        const bf=parseInt(row[11])||0;
-        const pf=parseInt(row[12])||0;
-        const pg=parseInt(row[13])||0;
-        const ptn=parseInt(row[14])||0;
-        const settle=parseInt(row[17])||0;
-        const planName=String(row[18]||'');
-        const mdName=String(row[19]||'');
-        const settleDate=String(row[20]||'');
+        const cnt=moneyCell(getCellByHeaders(row,headers,['정산 대상 건수','정산대상건수'],2));
+        const pay=moneyCell(getCellByHeaders(row,headers,['결제금액'],3));
+        const refund=moneyCell(getCellByHeaders(row,headers,['환불금액'],5));
+        const bf=moneyCell(getCellByHeaders(row,headers,['기본 수수료','기본수수료'],11));
+        const pf=moneyCell(getCellByHeaders(row,headers,['플랜 수수료','플랜수수료'],12));
+        const pg=moneyCell(getCellByHeaders(row,headers,['PG 수수료','PG수수료'],13));
+        const ptn=moneyCell(getCellByHeaders(row,headers,['파트너 수수료','파트너수수료'],14));
+        const settle=moneyCell(getCellByHeaders(row,headers,['정산 지급 금액','정산지급금액'],17));
+        const fmd=moneyCell(getCellByHeaders(row,headers,['고정 MD 수수료(정액)','고정 MD 수수료','고정MD수수료'],27));
+        const rmd=moneyCell(getCellByHeaders(row,headers,['MD 플랜 수수료(매출 비례)','MD 플랜 수수료','MD플랜수수료','매출 비례'],28));
+        const hmd=moneyCell(getCellByHeaders(row,headers,['헤드 MD 커미션','헤드MD커미션'],29));
+        const planName=textCell(getCellByHeaders(row,headers,['현재 플랜 명','현재플랜명','현재 플랜명','플랜명'],18));
+        const mdName=textCell(getCellByHeaders(row,headers,['현재MD명','현재 MD명','MD명','담당MD'],19));
+        const settleDate=normalizeSettleDate(getCellByHeaders(row,headers,['정산일','정산 일자','정산일자'],20));
 
         if(!settlements[campName])settlements[campName]=[];
-        const key=String(row[0])+'_'+campName;
-        if(!settlements[campName].find(s=>s.key===key)){
-          settlements[campName].push({key,period:String(row[0]),date:settleDate,pay,refund,settle,cnt,bf,pf,pg,ptn,md:mdName,plan:planName});
-          newCount++;
-        }
+        const key=String(period)+'_'+campName;
+        const record={key,period,date:settleDate,pay,refund,settle,cnt,bf,pf,pg,ptn,fmd,rmd,hmd,md:mdName,plan:planName};
+        const oldIdx=settlements[campName].findIndex(s=>s.key===key);
+        if(oldIdx>=0){settlements[campName][oldIdx]=record;updatedCount++;}
+        else{settlements[campName].push(record);newCount++;}
       }
       csSave(settlements);
       const periodList=Array.from(periodSet).sort();
@@ -1575,7 +1621,7 @@ window.handleSettleUpload=function(file){
       // 메인 탭 재렌더
       try{if(typeof renderTab==='function')renderTab('overview');}catch(e){}
 
-      result.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px"><span style="color:var(--green);font-weight:700">✓</span> <strong style="font-size:12px">'+periodLabel+' 반영 완료</strong><br><span style="font-size:11px;color:var(--text2)">'+total+'건 · '+campSet.size+'개 업체 · 신규 '+newCount+'건 · KPI 갱신됨</span></div>';
+      result.innerHTML='<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px"><span style="color:var(--green);font-weight:700">✓</span> <strong style="font-size:12px">'+periodLabel+' 반영 완료</strong><br><span style="font-size:11px;color:var(--text2)">'+total+'건 · '+campSet.size+'개 업체 · 신규 '+newCount+'건 · 갱신 '+updatedCount+'건 · KPI/온라인RS 갱신됨</span></div>';
     }catch(err){
       result.innerHTML='<span style="color:var(--red);font-size:12px">오류: '+err.message+'</span>';
     }
@@ -1627,7 +1673,9 @@ function rebuildOnlineRSFromSettlements(){
   Object.entries(settlements||{}).forEach(([campName, items])=>{
     (items||[]).forEach(s=>{
       const rs=estimateRSFees(campName,s.pay||0);
-      generated.push([String(s.period||''),String(s.date||''),campName,String(s.plan||''),rs.rmd||0]);
+      const hasDirectRmd=s.rmd!==''&&s.rmd!=null&&Number.isFinite(Number(s.rmd));
+      const onlineRs=hasDirectRmd?Number(s.rmd):(rs.rmd||0);
+      generated.push([String(s.period||''),normalizeSettleDate(s.date||''),campName,String(s.plan||''),onlineRs]);
     });
   });
   const generatedKeys=new Set(generated.map(r=>String(r[0])+'|'+String(r[2])));
@@ -1712,7 +1760,7 @@ window.mergeSettlementsToMonthly=function(){
       const y=parseInt(parts[0]), m=parseInt(parts[1]);
       if(!y||!m||m<1||m>12)return;
       const k=campName+'|'+y+'|'+m;
-      if(!byMonth[k])byMonth[k]={n:campName,y,m,cnt:0,pay:0,ref:0,set:0,bf:0,pf:0,pg:0,ptn:0};
+      if(!byMonth[k])byMonth[k]={n:campName,y,m,cnt:0,pay:0,ref:0,set:0,bf:0,pf:0,pg:0,ptn:0,fmd:0,rmd:0,hmd:0,hasDirectMd:false};
       const r=byMonth[k];
       r.cnt+=s.cnt||0;
       r.pay+=s.pay||0;
@@ -1722,16 +1770,21 @@ window.mergeSettlementsToMonthly=function(){
       r.pf+=s.pf||0;
       r.pg+=s.pg||0;
       r.ptn+=s.ptn||0;
+      const hasDirectMd=[s.fmd,s.rmd,s.hmd].some(v=>v!==''&&v!=null&&Number.isFinite(Number(v)));
+      if(hasDirectMd){
+        r.fmd+=Number(s.fmd)||0; r.rmd+=Number(s.rmd)||0; r.hmd+=Number(s.hmd)||0; r.hasDirectMd=true;
+      }
     });
   });
   // D.monthly에 머지 (덮어쓰기/추가) + RS수수료 추정
   Object.values(byMonth).forEach(r=>{
-    const rs=estimateRSFees(r.n,r.pay);
+    const rs=r.hasDirectMd?{fmd:r.fmd||0,rmd:r.rmd||0,hmd:r.hmd||0}:estimateRSFees(r.n,r.pay);
+    const clean={n:r.n,y:r.y,m:r.m,cnt:r.cnt,pay:r.pay,ref:r.ref,set:r.set,bf:r.bf,pf:r.pf,pg:r.pg,ptn:r.ptn,...rs};
     const idx=D.monthly.findIndex(x=>x.n===r.n&&x.y===r.y&&x.m===r.m);
     if(idx>=0){
-      D.monthly[idx]={...r, ...rs};
+      D.monthly[idx]=clean;
     }else{
-      D.monthly.push({...r, ...rs});
+      D.monthly.push(clean);
     }
   });
   // 연간 집계 재구성 (yearly 기반 분석들도 갱신)
