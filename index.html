@@ -877,7 +877,7 @@ window.renderMoMCampChart=function(){
 function renderDecline(){
   const type=document.getElementById('decType').value;
   const th=+document.getElementById('decThreshold').value;
-  let data=type==='yoy'?getYoYData(2026,2025):getMoMData(2026,3);
+  let data=type==='yoy'?getYoYData(2026,2025):getMoMData(2026,latestMonthForYear(2026));
   let dec=data.filter(r=>r.payChg!==null&&r.payChg<th);
   // add sortable fields
   dec.forEach(r=>{const c=r.camp||{};r.region=(c.a||'').split(' ').slice(0,2).join(' ');r.plan=c.p||'';r.sites=c.z||0;r.loss=r.prevPay-r.curPay;r.mdLoss=(r.prevMdFee||0)-r.mdFee;r.level=r.payChg<-50?0:r.payChg<-30?1:2});
@@ -972,7 +972,7 @@ function renderMarketCharts(){
 
 // === 마케팅 타겟 분석 ===
 function renderMktTarget(){
-  const targets=(RAW.mktTargets||[]).map((r,i)=>({...r,rank:i+1}));
+  const targets=buildMktTargetsFromCurrentData().map((r,i)=>({...r,rank:i+1}));
   // KPI
   const avgChg=targets.length?(targets.reduce((s,r)=>s+r.chg,0)/targets.length).toFixed(1):'0';
   const avgAnnual=targets.length?Math.round(targets.reduce((s,r)=>s+r.annual,0)/targets.length):0;
@@ -1525,7 +1525,7 @@ window.handleSettleUpload=function(file){
   const result=document.getElementById('mainUploadResult');
   result.innerHTML='<span style="color:var(--accent);font-size:12px">읽는 중...</span>';
   const reader=new FileReader();
-  reader.onload=function(e){
+  reader.onload=async function(e){
     try{
       const wb=XLSX.read(e.target.result,{type:'array'});
       const ws=wb.Sheets[wb.SheetNames[0]];
@@ -1570,6 +1570,8 @@ window.handleSettleUpload=function(file){
 
       // 정산 데이터를 D.monthly에 머지 → KPI/표/차트에 즉시 반영
       mergeSettlementsToMonthly();
+      refreshDerivedDashboardData();
+      if(typeof saveSecurePayload==='function'&&secureUser){await saveSecurePayload(snapshotPayloadFromCurrentState());}
       // 메인 탭 재렌더
       try{if(typeof renderTab==='function')renderTab('overview');}catch(e){}
 
@@ -1613,6 +1615,84 @@ function rebuildYearlyFromMonthly(){
   });
   D.yearly=Object.values(map);
 }
+
+function latestMonthForYear(year){
+  const months=[...new Set(D.monthly.filter(r=>r.y===year).map(r=>r.m))].sort((a,b)=>b-a);
+  return months[0]||3;
+}
+
+function rebuildOnlineRSFromSettlements(){
+  const settlements=csLoad();
+  const generated=[];
+  Object.entries(settlements||{}).forEach(([campName, items])=>{
+    (items||[]).forEach(s=>{
+      const rs=estimateRSFees(campName,s.pay||0);
+      generated.push([String(s.period||''),String(s.date||''),campName,String(s.plan||''),rs.rmd||0]);
+    });
+  });
+  const generatedKeys=new Set(generated.map(r=>String(r[0])+'|'+String(r[2])));
+  const existing=(ONLINE_RS||[]).filter(r=>!generatedKeys.has(String(r[0])+'|'+String(r[2])));
+  ONLINE_RS=[...existing,...generated].filter(r=>r[0]&&r[2]);
+}
+
+function buildMktTargetsFromCurrentData(){
+  const y25=new Map(),y26=new Map();
+  D.yearly.forEach(r=>{
+    if(r.y===2025)y25.set(r.n,r);
+    if(r.y===2026)y26.set(r.n,r);
+  });
+  return D.camps.map(c=>{
+    const a=y25.get(c.n)||{},b=y26.get(c.n)||{};
+    const pay25=a.pay||0,pay26=b.pay||0;
+    if(pay25<=0||pay26<=0)return null;
+    const chg=Math.round(((pay26-pay25)/pay25)*100);
+    if(chg>-10)return null;
+    const exposure=Number(c.ex)||0,favs=Number(c.fv)||0,sites=Number(c.z)||0;
+    const conv=exposure>0?Number(((b.cnt||0)/exposure*100).toFixed(2)):0;
+    const declineScore=Math.min(0.4,Math.abs(chg)/100*0.4);
+    const exposureScore=Math.min(0.2,exposure/200000*0.2);
+    const scaleScore=Math.min(0.15,sites/40*0.15);
+    const favScore=Math.min(0.1,favs/3000*0.1);
+    const planScore=String(c.p||'').includes('유료')||String(c.mp||'').includes('유료')?0.1:0.04;
+    const score=Number(Math.min(0.95,declineScore+exposureScore+scaleScore+favScore+planScore+0.1).toFixed(2));
+    return {
+      n:c.n,region:(c.a||'').split(' ').slice(0,2).join(' '),sites,pay25,pay26,chg,
+      annual:pay26,exposure,favs,plan:c.p||c.mp||'-',conv,score,link:c.l||'',
+      photoScore:3,photoNeed:'점검',mainType:'데이터 기반',photoNote:'최근 정산 기준으로 재계산된 타겟'
+    };
+  }).filter(Boolean).sort((a,b)=>b.score-a.score||a.chg-b.chg);
+}
+
+function refreshDerivedDashboardData(){
+  rebuildOnlineRSFromSettlements();
+  RAW.mktTargets=buildMktTargetsFromCurrentData();
+  rebuildYearlyFromMonthly();
+}
+
+function monthlyObjectToRow(r){
+  return [r.y,r.m,r.n,r.cnt||0,r.pay||0,r.ref||0,r.set||0,r.bf||0,r.pf||0,r.pg||0,r.ptn||0,r.fmd||0,r.rmd||0,r.hmd||0];
+}
+
+function yearlyObjectToRow(r){
+  return [r.y,r.n,r.cnt||0,r.pay||0,r.ref||0,r.set||0,r.bf||0,r.pf||0,r.pg||0,r.ptn||0,r.fmd||0,r.rmd||0,r.hmd||0];
+}
+
+function snapshotPayloadFromCurrentState(){
+  return {
+    raw:{
+      camps:D.camps||[],
+      monthly:(D.monthly||[]).map(monthlyObjectToRow),
+      yearly:(D.yearly||[]).map(yearlyObjectToRow),
+      mkt_m:RAW.mkt_m||[],
+      mkt_y:RAW.mkt_y||[],
+      targets:RAW.targets||[],
+      mktTargets:RAW.mktTargets||[],
+      md:RAW.md||[]
+    },
+    onlineRS:ONLINE_RS||[]
+  };
+}
+
 
 // 누적된 정산 데이터를 월별로 집계해 D.monthly에 머지
 // - 같은 캠핑장+연+월 항목이 있으면 정산 데이터로 덮어씀 (cnt/pay/ref/set/bf/pf/pg/ptn)
@@ -1658,13 +1738,13 @@ window.mergeSettlementsToMonthly=function(){
   rebuildYearlyFromMonthly();
 };
 // 페이지 로드 시점에 한 번 실행 (이전에 업로드한 정산 데이터 자동 반영)
-try{mergeSettlementsToMonthly();}catch(e){console.warn('settle merge failed',e);}
+try{mergeSettlementsToMonthly();refreshDerivedDashboardData();}catch(e){console.warn('settle merge failed',e);}
 
 // 잘못 업로드된 다른 MD 데이터 제거 - 본인(박해준 MD) 데이터만 유지
 window.filterSettleByMD=function(){
   const myName=prompt('유지할 MD명을 입력하세요','박해준');
   if(!myName)return;
-  const s=JSON.parse(localStorage.getItem('camfit_settlements')||'{}');
+  const s=csLoad();
   let removed=0,kept=0;
   Object.keys(s).forEach(camp=>{
     const before=s[camp].length;
@@ -1673,7 +1753,7 @@ window.filterSettleByMD=function(){
     kept+=s[camp].length;
     if(!s[camp].length)delete s[camp];
   });
-  localStorage.setItem('camfit_settlements',JSON.stringify(s));
+  csSave(s);
   alert('✅ '+removed+'건 제거, '+kept+'건 유지\n페이지를 새로고침합니다.');
   location.reload();
 };
@@ -1681,7 +1761,7 @@ window.filterSettleByMD=function(){
 // 정산 업로드 데이터 전체 초기화
 window.clearSettleData=function(){
   if(!confirm('모든 정산 업로드 데이터를 삭제하시겠습니까?\n(KPI는 원래 박혀있던 RAW 데이터로 돌아갑니다)'))return;
-  localStorage.removeItem('camfit_settlements');
+  csSave({});
   localStorage.removeItem('settle_last_upload');
   alert('✅ 정산 업로드 데이터가 모두 삭제되었습니다.\n페이지를 새로고침합니다.');
   location.reload();
