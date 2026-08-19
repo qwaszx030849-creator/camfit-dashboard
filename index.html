@@ -589,6 +589,7 @@ function initOnlineRSPeriod(){
   select.innerHTML=periods.slice().reverse().map(p=>`<option value="${p}">${onlineRsLabel(p,type)}</option>`).join('');
   renderOnlineRS();
 }
+function onlineRsRowKey(r){return [String(r?.[0]||''),onlineRsMonthKey(r?.[1])||String(r?.[1]||''),String(r?.[2]||'')].join('|')}
 function onlineRsAggregate(period,type){
   const map={};
   ONLINE_RS.forEach(r=>{const key=type==='month'?onlineRsMonthKey(r[1]):r[0];if(key!==period)return;const n=r[2];if(!map[n])map[n]={name:n,plan:r[3]||'-',rs:0};map[n].rs+=Number(r[4])||0;if(r[3])map[n].plan=r[3]});
@@ -2319,13 +2320,36 @@ async function secureImportFiles(files){
     if(idx('고유ID')>=0){
       const addr=idx('주소'),site=idx('운영중인 사이트 수')>=0?idx('운영중인 사이트 수'):idx('운영중인 방 수');
       rows.slice(1).forEach(r=>{const id=String(r[idx('고유ID')]||'').trim(),name=String(r[idx('캠핑장명')]||'').trim();if(!id||!name)return;const supplied=String(r[idx('링크')]||'').trim();result.raw.camps.push({n:name,s:String(r[idx('운영상태')]||''),r:String(r[idx('등록상태')]||''),p:String(r[idx('플랜명')]||''),a:String(r[addr]||''),t:String(r[idx('사업자번호')]||''),z:Number(r[site])||0,rv:Number(r[idx('리뷰 수')])||0,ex:Number(r[idx('노출 수')])||0,fv:Number(r[idx('찜 수')])||0,l:supplied||`https://camfit.co.kr/${h.includes('운영중인 방 수')?'accommodation':'camp'}/${id}`,h:String(r[idx('캠지기ID')]||''),mp:String(r[idx('담당MD 플랜명')]||''),bt:String(r[idx('업체 종목')]||''),zt:String(r[idx('보유 존 타입')]||''),ct:h.includes('운영중인 방 수')?'숙소':'캠핑장'});});
-    }else if(idx('MD 플랜 수수료(매출 비례)')>=0){
-      const agg={};rows.slice(1).forEach(r=>{const name=String(r[idx('현재 캠핑장 명')]||'').trim(),date=String(r[idx('정산일')]||''),dm=date.match(/(\d{4})\.(\d{1,2})\./);if(!name||!dm)return;const vals=[Number(r[idx('정산 대상 건수')])||0,Number(r[idx('결제금액')])||0,Number(r[idx('환불금액')])||0,Number(r[idx('정산 지급 금액')])||0,Number(r[idx('기본 수수료')])||0,Number(r[idx('플랜 수수료')])||0,Number(r[idx('PG 수수료')])||0,Number(r[idx('파트너 수수료')])||0,Number(r[idx('고정 MD 수수료(정액)')])||0,Number(r[idx('MD 플랜 수수료(매출 비례)')])||0,Number(r[idx('헤드 MD 커미션')])||0],key=dm[1]+'|'+dm[2]+'|'+name;if(!agg[key])agg[key]=[Number(dm[1]),Number(dm[2]),name,0,0,0,0,0,0,0,0,0,0,0];vals.forEach((v,i)=>agg[key][i+3]+=v);result.onlineRS.push([String(r[idx('정산 차수')]||''),date,name,String(r[idx('현재 플랜 명')]||''),vals[9]]);});result.raw.monthly.push(...Object.values(agg));
+    }else if(headerIndex(h,['MD 플랜 수수료(매출 비례)','MD 플랜 수수료','MD플랜수수료','매출 비례'])>=0){
+      const agg={};rows.slice(1).forEach(r=>{
+        const name=textCell(getCellByHeaders(r,h,['현재 캠핑장 명','현재 캠핑장명','사업자명','캠핑장명','업체명'],1));
+        const date=normalizeSettleDate(getCellByHeaders(r,h,['정산일','정산 일자','정산일자'],20));
+        const monthKey=onlineRsMonthKey(date);
+        if(!name||!monthKey)return;
+        const [year,month]=monthKey.split('-').map(Number);
+        const vals=[
+          moneyCell(getCellByHeaders(r,h,['정산 대상 건수','정산대상건수'],2)),
+          moneyCell(getCellByHeaders(r,h,['결제금액'],3)),
+          moneyCell(getCellByHeaders(r,h,['환불금액'],5)),
+          moneyCell(getCellByHeaders(r,h,['정산 지급 금액','정산지급금액'],17)),
+          moneyCell(getCellByHeaders(r,h,['기본 수수료','기본수수료'],11)),
+          moneyCell(getCellByHeaders(r,h,['플랜 수수료','플랜수수료'],12)),
+          moneyCell(getCellByHeaders(r,h,['PG 수수료','PG수수료'],13)),
+          moneyCell(getCellByHeaders(r,h,['파트너 수수료','파트너수수료'],14)),
+          moneyCell(getCellByHeaders(r,h,['고정 MD 수수료(정액)','고정 MD 수수료','고정MD수수료'],27)),
+          moneyCell(getCellByHeaders(r,h,['MD 플랜 수수료(매출 비례)','MD 플랜 수수료','MD플랜수수료','매출 비례'],28)),
+          moneyCell(getCellByHeaders(r,h,['헤드 MD 커미션','헤드MD커미션'],29))
+        ];
+        const key=year+'|'+month+'|'+name;
+        if(!agg[key])agg[key]=[year,month,name,0,0,0,0,0,0,0,0,0,0,0];
+        vals.forEach((v,i)=>agg[key][i+3]+=v);
+        result.onlineRS.push([textCell(getCellByHeaders(r,h,['정산 차수','정산차수','정산 주차','정산주차'],0)),date,name,textCell(getCellByHeaders(r,h,['현재 플랜 명','현재플랜명','현재 플랜명','플랜명'],18)),vals[9]]);
+      });result.raw.monthly.push(...Object.values(agg));
     }
   }
   result.raw.camps=[...new Map(result.raw.camps.map(c=>[(c.l||c.n),c])).values()];
   result.raw.monthly=[...new Map(result.raw.monthly.map(r=>[r[0]+'|'+r[1]+'|'+r[2],r])).values()];
-  result.onlineRS=[...new Map(result.onlineRS.map(r=>[r[0]+'|'+r[2],r])).values()];
+  result.onlineRS=[...new Map(result.onlineRS.map(r=>[onlineRsRowKey(r),r])).values()];
   const yearAgg={};result.raw.monthly.forEach(r=>{const k=r[0]+'|'+r[2];if(!yearAgg[k])yearAgg[k]=[r[0],r[2],0,0,0,0,0,0,0,0,0,0,0];for(let i=2;i<=12;i++)yearAgg[k][i]+=r[i+1]||0});result.raw.yearly=Object.values(yearAgg);
   await saveSecurePayload(result);applySecurePayload(result);document.getElementById('totalCamps').textContent=activeCamps().length;renderTab('overview');alert('내 대시보드 데이터 저장 완료');
 }
