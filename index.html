@@ -106,6 +106,17 @@ th.sortable .arr-up,th.sortable .arr-down{display:block}
 .map-selected-info{min-width:0}.map-selected-info strong{display:block}.map-selected-info span{font-size:12px;color:var(--text2)}
 .map-frame{width:100%;flex:1;border:0;background:var(--card2)}
 @media(max-width:900px){.map-layout{grid-template-columns:1fr;height:auto}.map-sidebar{height:420px}.map-frame-wrap{height:560px}}
+.sim-shell{display:grid;grid-template-columns:minmax(360px,.9fr) minmax(420px,1.1fr);gap:16px;align-items:start}
+.sim-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px}
+.sim-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:20px}.sim-head h2{font-size:20px;margin-bottom:5px}.sim-head p{font-size:13px;color:var(--text2);line-height:1.55}
+.sim-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:5px;background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:20px}.sim-tabs button{border:0;border-radius:7px;padding:10px;background:transparent;color:var(--text2);font-weight:700;cursor:pointer}.sim-tabs button.active{background:var(--accent);color:#fff}
+.sim-field{margin-bottom:16px}.sim-field label{display:block;color:var(--text2);font-size:12px;font-weight:600;margin-bottom:7px}.sim-input-wrap{position:relative}.sim-input{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:9px;padding:12px 48px 12px 13px;color:var(--text);font-size:14px;outline:none}.sim-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.14)}.sim-unit{position:absolute;right:13px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text2);pointer-events:none}
+.sim-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.sim-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.sim-details{border-top:1px solid var(--border);padding-top:14px;margin-top:4px}.sim-details summary{cursor:pointer;color:var(--text2);font-size:13px;font-weight:700;margin-bottom:15px}.sim-section-label{color:var(--accent);font-size:11px;font-weight:700;margin:17px 0 9px}
+.sim-check{display:flex;align-items:center;gap:9px;background:var(--card2);border-radius:9px;padding:12px;margin-top:14px;font-size:13px}.sim-check input{accent-color:var(--green);width:17px;height:17px}.sim-result{position:sticky;top:16px;background:linear-gradient(145deg,rgba(59,130,246,.10),rgba(16,185,129,.06)),var(--card)}
+.sim-result-top{display:flex;justify-content:space-between;gap:14px}.sim-result-label{color:var(--text2);font-size:12px}.sim-total{font-size:38px;line-height:1.15;font-weight:800;letter-spacing:-1.5px;color:#6ee7b7;margin-top:5px}.sim-badge{background:rgba(59,130,246,.17);color:#93c5fd;border:1px solid rgba(59,130,246,.25);padding:5px 10px;border-radius:999px;height:fit-content;font-size:11px;font-weight:700}
+.sim-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin:20px 0}.sim-kpi{background:rgba(15,23,42,.58);border:1px solid var(--border);border-radius:10px;padding:13px}.sim-kpi span{display:block;color:var(--text2);font-size:11px}.sim-kpi strong{display:block;margin-top:4px;font-size:18px}.sim-breakdown{border-top:1px solid var(--border);padding-top:14px}.sim-row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;font-size:12px}.sim-row span{color:var(--text2)}.sim-row .cost{color:#fca5a5}.sim-row.total{border-top:1px dashed var(--border);padding-top:11px;margin-top:5px;font-size:13px}
+.sim-meter{height:10px;background:var(--bg);border-radius:99px;overflow:hidden;margin-top:14px}.sim-meter i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:99px}.sim-next{background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.25);color:#bfdbfe;border-radius:9px;padding:12px;margin-top:14px;font-size:12px;line-height:1.55}.sim-note{color:var(--text2);font-size:11px;line-height:1.55;margin-top:12px}.sim-hidden{display:none!important}
+@media(max-width:1000px){.sim-shell{grid-template-columns:1fr}.sim-result{position:static}}@media(max-width:560px){.sim-grid2,.sim-grid3{grid-template-columns:1fr}.sim-total{font-size:31px}.sim-card{padding:17px}}
 </style>
 </head>
 <body class="auth-locked">
@@ -135,6 +146,7 @@ th.sortable .arr-up,th.sortable .arr-down{display:block}
   <button data-tab="camps">거래처 목록</button>
   <button data-tab="clientMap">🗺️ 거래처 지도</button>
   <button data-tab="newsletter">📰 뉴스레터</button>
+  <button data-tab="incentive">💰 수당 시뮬레이터</button>
 </div>
 <div class="content" id="app"></div>
 
@@ -554,6 +566,82 @@ clientMap(){
     </section>
   </div>`;
 },
+incentive(){
+  return `
+  <div class="sim-head">
+    <div><h2>💰 공헌이익 · 영업수당 시뮬레이터</h2><p>예상 거래액과 수수료를 입력하면 프로모션 기준 수당을 바로 계산합니다.</p></div>
+    <span class="tag tag-green">3개월 기준</span>
+  </div>
+  <div class="sim-shell">
+    <section class="sim-card">
+      <div class="sim-tabs">
+        <button id="simType1Btn" class="active" onclick="simSwitch('type1')">1타입 · 공헌이익</button>
+        <button id="simType2Btn" onclick="simSwitch('type2')">2타입 · 거래액 구간</button>
+      </div>
+      <div id="simType1Inputs">
+        <div class="sim-field"><label for="simGmv">3개월 거래액</label><div class="sim-input-wrap"><input class="sim-input" id="simGmv" type="number" min="0" step="100000" value="10000000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
+        <div class="sim-grid2">
+          <div class="sim-field"><label for="simFee">계약 수수료율</label><div class="sim-input-wrap"><input class="sim-input" id="simFee" type="number" min="0" max="100" step=".1" value="16.5" oninput="simCalc()"><span class="sim-unit">% VAT포함</span></div></div>
+          <div class="sim-field"><label for="simAvg">평균 예약금액</label><div class="sim-input-wrap"><input class="sim-input" id="simAvg" type="number" min="1" step="10000" value="150000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
+        </div>
+        <details class="sim-details">
+          <summary>상세 계산 가정 수정</summary>
+          <div class="sim-section-label">거래 채널 비중 · 합계는 자동 보정</div>
+          <div class="sim-grid3">
+            <div class="sim-field"><label>일반 온라인</label><div class="sim-input-wrap"><input class="sim-input" id="simOnline" type="number" min="0" max="100" value="100" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
+            <div class="sim-field"><label>네이버</label><div class="sim-input-wrap"><input class="sim-input" id="simNaver" type="number" min="0" max="100" value="0" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
+            <div class="sim-field"><label>계좌이체</label><div class="sim-input-wrap"><input class="sim-input" id="simBank" type="number" min="0" max="100" value="0" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
+          </div>
+          <div id="simShareInfo" class="sim-note" style="margin-top:-5px"></div>
+          <div class="sim-section-label">비용·포인트 기준</div>
+          <div class="sim-grid2">
+            <div class="sim-field"><label>일반 PG 수수료</label><div class="sim-input-wrap"><input class="sim-input" id="simPg" type="number" step=".01" value="2.2" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
+            <div class="sim-field"><label>네이버 연동 수수료</label><div class="sim-input-wrap"><input class="sim-input" id="simNaverFee" type="number" step=".01" value="3.1" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
+            <div class="sim-field"><label>계좌 포인트 수수료</label><div class="sim-input-wrap"><input class="sim-input" id="simBankFee" type="number" step=".1" value="6.1" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
+            <div class="sim-field"><label>체크아웃 리워드</label><div class="sim-input-wrap"><input class="sim-input" id="simCheckout" type="number" step=".01" value=".1" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
+            <div class="sim-field"><label>텍스트 리뷰 작성률</label><div class="sim-input-wrap"><input class="sim-input" id="simTextReview" type="number" value="0" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
+            <div class="sim-field"><label>포토 리뷰 작성률</label><div class="sim-input-wrap"><input class="sim-input" id="simPhotoReview" type="number" value="0" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
+          </div>
+          <p class="sim-note">문자 매출 50P×유료문자(온라인 0.56건·계좌 2.19건), 문자 원가 5.5원×전체문자(온라인 3.14건·계좌 3.71건), 리뷰 포인트는 텍스트 101P·포토 202P로 계산합니다.</p>
+        </details>
+      </div>
+      <div id="simType2Inputs" class="sim-hidden">
+        <div class="sim-field"><label for="simGmv13">1~3개월 거래액</label><div class="sim-input-wrap"><input class="sim-input" id="simGmv13" type="number" min="0" step="100000" value="10000000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
+        <div class="sim-field"><label for="simGmv46">4~6개월 거래액</label><div class="sim-input-wrap"><input class="sim-input" id="simGmv46" type="number" min="0" step="100000" value="10000000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
+        <p class="sim-note">기본 10만원은 1회 지급하며, 추가 수당은 각 3개월 거래액 구간에 동일하게 적용합니다.</p>
+      </div>
+      <label class="sim-check"><input id="simIndependent" type="checkbox" onchange="simCalc()">독채 캠핑장 추가 수당 20만원 포함</label>
+    </section>
+    <section class="sim-card sim-result">
+      <div class="sim-result-top"><div><div class="sim-result-label">예상 총 영업수당</div><div class="sim-total" id="simTotal">0원</div></div><span class="sim-badge" id="simBadge">1타입</span></div>
+      <div class="sim-kpis">
+        <div class="sim-kpi"><span>예상 공헌이익</span><strong id="simContribution">0원</strong></div>
+        <div class="sim-kpi"><span>공헌이익률</span><strong id="simMargin">0.00%</strong></div>
+        <div class="sim-kpi"><span>기본 수당</span><strong id="simBase">100,000원</strong></div>
+        <div class="sim-kpi"><span>추가 수당</span><strong id="simExtra">0원</strong></div>
+      </div>
+      <div class="sim-breakdown" id="simType1Breakdown">
+        <div class="sim-row"><span>현금 수수료 매출 · VAT 제외</span><strong id="simCashRevenue">0원</strong></div>
+        <div class="sim-row"><span>계좌이체 포인트 수수료</span><strong id="simBankRevenue">0원</strong></div>
+        <div class="sim-row"><span>문자 발송 포인트</span><strong id="simSmsRevenue">0원</strong></div>
+        <div class="sim-row"><span>PG·네이버 수수료</span><strong class="cost" id="simPaymentCost">-0원</strong></div>
+        <div class="sim-row"><span>문자 원가</span><strong class="cost" id="simSmsCost">-0원</strong></div>
+        <div class="sim-row"><span>체크아웃·리뷰 포인트</span><strong class="cost" id="simRewardCost">-0원</strong></div>
+        <div class="sim-row total"><span>예상 공헌이익</span><strong id="simContribution2">0원</strong></div>
+        <div class="sim-meter"><i id="simMeter" style="width:0"></i></div>
+      </div>
+      <div class="sim-breakdown sim-hidden" id="simType2Breakdown">
+        <div class="sim-row"><span>1차 기본 수당</span><strong id="simT2Base">100,000원</strong></div>
+        <div class="sim-row"><span>1~3개월 추가 수당</span><strong id="simBonus13">0원</strong></div>
+        <div class="sim-row"><span>4~6개월 추가 수당</span><strong id="simBonus46">0원</strong></div>
+        <div class="sim-row"><span>독채 추가 수당</span><strong id="simIndependentBonus">0원</strong></div>
+        <div class="sim-row total"><span>예상 총 영업수당</span><strong id="simT2Total">0원</strong></div>
+      </div>
+      <div class="sim-next" id="simNext"></div>
+      <p class="sim-note" id="simWarning">실제 정산 시 취소·환불, 월별 PG 요율과 최종 지급 기준에 따라 달라질 수 있습니다. R/S 및 고정비는 제외합니다.</p>
+    </section>
+  </div>`;
+},
 newsletter(){
   return `
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
@@ -572,6 +660,92 @@ newsletter(){
   </div>`;
 }
 };
+
+let incentiveSimType='type1';
+function simEl(id){return document.getElementById(id)}
+function simVal(id){return Math.max(0,Number(simEl(id)?.value)||0)}
+function simMoney(n){return Math.round(Number.isFinite(n)?n:0).toLocaleString('ko-KR')+'원'}
+function simSwitch(type){
+  incentiveSimType=type;
+  simEl('simType1Btn')?.classList.toggle('active',type==='type1');
+  simEl('simType2Btn')?.classList.toggle('active',type==='type2');
+  simEl('simType1Inputs')?.classList.toggle('sim-hidden',type!=='type1');
+  simEl('simType2Inputs')?.classList.toggle('sim-hidden',type!=='type2');
+  simEl('simType1Breakdown')?.classList.toggle('sim-hidden',type!=='type1');
+  simEl('simType2Breakdown')?.classList.toggle('sim-hidden',type!=='type2');
+  if(simEl('simBadge'))simEl('simBadge').textContent=type==='type1'?'1타입':'2타입';
+  simCalc();
+}
+function simType2Bonus(gmv){
+  if(gmv>=50000000)return 750000;
+  if(gmv>=25000000)return 350000;
+  if(gmv>=15000000)return 200000;
+  if(gmv>=10000000)return 100000;
+  if(gmv>=5000000)return 20000;
+  return 0;
+}
+function simNextThreshold(gmv){
+  return [[5000000,20000],[10000000,100000],[15000000,200000],[25000000,350000],[50000000,750000]].find(x=>gmv<x[0])||null;
+}
+function simCalc(){
+  if(!simEl('simTotal'))return;
+  const independent=simEl('simIndependent')?.checked?200000:0;
+  if(incentiveSimType==='type2'){
+    const g13=simVal('simGmv13'),g46=simVal('simGmv46');
+    const b13=simType2Bonus(g13),b46=simType2Bonus(g46);
+    const clawback=g13+g46<3000000,base=clawback?0:100000,total=base+b13+b46+independent;
+    simEl('simTotal').textContent=simMoney(total);
+    simEl('simContribution').textContent='해당 없음';
+    simEl('simMargin').textContent='구간형';
+    simEl('simBase').textContent=simMoney(base);
+    simEl('simExtra').textContent=simMoney(b13+b46+independent);
+    simEl('simT2Base').textContent=clawback?'0원 · 환수':simMoney(100000);
+    simEl('simBonus13').textContent=simMoney(b13);
+    simEl('simBonus46').textContent=simMoney(b46);
+    simEl('simIndependentBonus').textContent=simMoney(independent);
+    simEl('simT2Total').textContent=simMoney(total);
+    const n13=simNextThreshold(g13),n46=simNextThreshold(g46),guides=[];
+    guides.push(n13?'1차 다음 구간까지 <strong>'+simMoney(n13[0]-g13)+'</strong>':'1차 최고 구간 달성');
+    guides.push(n46?'2차 다음 구간까지 <strong>'+simMoney(n46[0]-g46)+'</strong>':'2차 최고 구간 달성');
+    simEl('simNext').innerHTML=guides.join(' · ');
+    simEl('simWarning').textContent=clawback?'6개월 누적 거래액 300만원 미만으로 기본 10만원 환수를 적용했습니다. 추가 수당 환수 여부는 최종 지침 확인이 필요합니다.':'구간 경계는 하한 이상으로 계산했습니다. 독채 추가 수당의 중복 지급 여부는 최종 지침을 확인하세요.';
+    return;
+  }
+  const gmv=simVal('simGmv'),fee=simVal('simFee')/100,avg=Math.max(1,simVal('simAvg'));
+  let online=simVal('simOnline'),naver=simVal('simNaver'),bank=simVal('simBank');
+  let shareTotal=online+naver+bank;
+  if(shareTotal<=0){online=100;naver=0;bank=0;shareTotal=100}
+  simEl('simShareInfo').textContent='현재 합계 '+shareTotal.toLocaleString('ko-KR')+'%'+(shareTotal===100?'':' · 입력 비율대로 자동 보정');
+  simEl('simShareInfo').style.color=shareTotal===100?'var(--text2)':'var(--orange)';
+  const onlineGmv=gmv*online/shareTotal,naverGmv=gmv*naver/shareTotal,bankGmv=gmv*bank/shareTotal;
+  const bookings=gmv/avg,onlineBookings=bookings*(online+naver)/shareTotal,bankBookings=bookings*bank/shareTotal;
+  const cashRevenue=(onlineGmv+naverGmv)*fee/1.1;
+  const bankRevenue=bankGmv*simVal('simBankFee')/100;
+  const smsRevenue=(onlineBookings*.56+bankBookings*2.19)*50;
+  const paymentCost=onlineGmv*simVal('simPg')/100+naverGmv*simVal('simNaverFee')/100;
+  const smsCost=(onlineBookings*3.14+bankBookings*3.71)*5.5;
+  const checkoutCost=(onlineGmv+naverGmv)*simVal('simCheckout')/100;
+  const reviewCost=onlineBookings*(simVal('simTextReview')/100*101+simVal('simPhotoReview')/100*202);
+  const rewardCost=checkoutCost+reviewCost;
+  const contribution=cashRevenue+bankRevenue+smsRevenue-paymentCost-smsCost-rewardCost;
+  const margin=gmv?contribution/gmv*100:0,bonus=Math.max(0,Math.min(5000000,contribution*.1)),total=100000+bonus+independent;
+  simEl('simTotal').textContent=simMoney(total);
+  simEl('simContribution').textContent=simMoney(contribution);
+  simEl('simContribution').style.color=contribution<0?'var(--red)':'var(--text)';
+  simEl('simMargin').textContent=margin.toFixed(2)+'%';
+  simEl('simBase').textContent=simMoney(100000);
+  simEl('simExtra').textContent=simMoney(bonus+independent);
+  simEl('simCashRevenue').textContent=simMoney(cashRevenue);
+  simEl('simBankRevenue').textContent=simMoney(bankRevenue);
+  simEl('simSmsRevenue').textContent=simMoney(smsRevenue);
+  simEl('simPaymentCost').textContent='-'+simMoney(paymentCost);
+  simEl('simSmsCost').textContent='-'+simMoney(smsCost);
+  simEl('simRewardCost').textContent='-'+simMoney(rewardCost);
+  simEl('simContribution2').textContent=simMoney(contribution);
+  simEl('simMeter').style.width=Math.max(0,Math.min(100,margin/15*100))+'%';
+  simEl('simNext').innerHTML=bonus>=5000000?'<strong>추가 수당 상한 달성</strong> · 추가 수당 500만원이 적용됩니다.':'<strong>추가 수당 상한까지 공헌이익 '+simMoney(Math.max(0,50000000-contribution))+' 남음</strong> · 현재 추가 수당은 '+simMoney(bonus)+'입니다.';
+  simEl('simWarning').textContent='실제 정산 시 취소·환불, 월별 PG 요율과 최종 지급 기준에 따라 달라질 수 있습니다. R/S 및 고정비는 제외합니다.';
+}
 
 // === 온라인 RS 분석 ===
 let onlineRsDir='desc';
@@ -743,6 +917,7 @@ function renderTab(name){
   if(name==='camps')initCampList();
   if(name==='clientMap')initClientMap();
   if(name==='newsletter')loadNewsletters();
+  if(name==='incentive'){incentiveSimType='type1';simCalc()}
 }
 
 document.getElementById('navBar').addEventListener('click',e=>{
