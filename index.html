@@ -581,9 +581,10 @@ incentive(){
       <div id="simType1Inputs">
         <div class="sim-field"><label for="simGmv">3개월 거래액</label><div class="sim-input-wrap"><input class="sim-input" id="simGmv" type="number" min="0" step="100000" value="10000000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
         <div class="sim-grid2">
-          <div class="sim-field"><label for="simFee">계약 수수료율</label><div class="sim-input-wrap"><input class="sim-input" id="simFee" type="number" min="0" max="100" step=".1" value="16.5" oninput="simCalc()"><span class="sim-unit">% VAT포함</span></div></div>
+          <div class="sim-field"><label for="simFee">계약 수수료율 · VAT 별도</label><div class="sim-input-wrap"><input class="sim-input" id="simFee" type="number" min="0" max="100" step=".1" value="10" oninput="simCalc()"><span class="sim-unit">% + VAT</span></div></div>
           <div class="sim-field"><label for="simAvg">평균 예약금액</label><div class="sim-input-wrap"><input class="sim-input" id="simAvg" type="number" min="1" step="10000" value="150000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
         </div>
+        <div id="simVatInfo" class="sim-next" style="margin:-5px 0 16px"></div>
         <details class="sim-details">
           <summary>상세 계산 가정 수정</summary>
           <div class="sim-section-label">거래 채널 비중 · 합계는 자동 보정</div>
@@ -711,7 +712,8 @@ function simCalc(){
     simEl('simWarning').textContent=clawback?'6개월 누적 거래액 300만원 미만으로 기본 10만원 환수를 적용했습니다. 추가 수당 환수 여부는 최종 지침 확인이 필요합니다.':'구간 경계는 하한 이상으로 계산했습니다. 독채 추가 수당의 중복 지급 여부는 최종 지침을 확인하세요.';
     return;
   }
-  const gmv=simVal('simGmv'),fee=simVal('simFee')/100,avg=Math.max(1,simVal('simAvg'));
+  const gmv=simVal('simGmv'),feeExVat=simVal('simFee')/100,avg=Math.max(1,simVal('simAvg'));
+  simEl('simVatInfo').innerHTML='입력 수수료 <strong>'+((feeExVat*100).toFixed(1))+'%</strong> + VAT 10% = 고객 적용 요율 <strong>'+((feeExVat*110).toFixed(1))+'%</strong>';
   let online=simVal('simOnline'),naver=simVal('simNaver'),bank=simVal('simBank');
   let shareTotal=online+naver+bank;
   if(shareTotal<=0){online=100;naver=0;bank=0;shareTotal=100}
@@ -719,7 +721,7 @@ function simCalc(){
   simEl('simShareInfo').style.color=shareTotal===100?'var(--text2)':'var(--orange)';
   const onlineGmv=gmv*online/shareTotal,naverGmv=gmv*naver/shareTotal,bankGmv=gmv*bank/shareTotal;
   const bookings=gmv/avg,onlineBookings=bookings*(online+naver)/shareTotal,bankBookings=bookings*bank/shareTotal;
-  const cashRevenue=(onlineGmv+naverGmv)*fee/1.1;
+  const cashRevenue=(onlineGmv+naverGmv)*feeExVat;
   const bankRevenue=bankGmv*simVal('simBankFee')/100;
   const smsRevenue=(onlineBookings*.56+bankBookings*2.19)*50;
   const paymentCost=onlineGmv*simVal('simPg')/100+naverGmv*simVal('simNaverFee')/100;
