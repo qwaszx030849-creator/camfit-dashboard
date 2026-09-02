@@ -569,21 +569,18 @@ clientMap(){
 incentive(){
   return `
   <div class="sim-head">
-    <div><h2>💰 공헌이익 · 영업수당 시뮬레이터</h2><p>예상 거래액과 수수료를 입력하면 프로모션 기준 수당을 바로 계산합니다.</p></div>
-    <span class="tag tag-green">3개월 기준</span>
+    <div><h2>💰 공헌이익 · 영업수당 시뮬레이터</h2><p>취소·환불을 제외한 최종 매출액과 수수료로 예상 수당을 계산합니다.</p></div>
+    <span class="tag tag-green">최종 매출 기준</span>
   </div>
   <div class="sim-shell">
     <section class="sim-card">
       <div class="sim-tabs">
         <button id="simType1Btn" class="active" onclick="simSwitch('type1')">1타입 · 공헌이익</button>
-        <button id="simType2Btn" onclick="simSwitch('type2')">2타입 · 거래액 구간</button>
+        <button id="simType2Btn" onclick="simSwitch('type2')">2타입 · 최종 매출 구간</button>
       </div>
       <div id="simType1Inputs">
-        <div class="sim-field"><label for="simGmv">3개월 거래액</label><div class="sim-input-wrap"><input class="sim-input" id="simGmv" type="number" min="0" step="100000" value="10000000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
-        <div class="sim-grid2">
-          <div class="sim-field"><label for="simFee">계약 수수료율 · VAT 별도</label><div class="sim-input-wrap"><input class="sim-input" id="simFee" type="number" min="0" max="100" step=".1" value="10" oninput="simCalc()"><span class="sim-unit">% + VAT</span></div></div>
-          <div class="sim-field"><label for="simAvg">평균 예약금액</label><div class="sim-input-wrap"><input class="sim-input" id="simAvg" type="number" min="1" step="10000" value="150000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
-        </div>
+        <div class="sim-field"><label for="simGmv">3개월 최종 매출 발생금액 · 취소/환불 제외</label><div class="sim-input-wrap"><input class="sim-input" id="simGmv" type="number" min="0" step="100000" value="10000000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
+        <div class="sim-field"><label for="simFee">계약 수수료율 · VAT 별도</label><div class="sim-input-wrap"><input class="sim-input" id="simFee" type="number" min="0" max="100" step=".1" value="10" oninput="simCalc()"><span class="sim-unit">% + VAT</span></div></div>
         <div id="simVatInfo" class="sim-next" style="margin:-5px 0 16px"></div>
         <details class="sim-details">
           <summary>상세 계산 가정 수정</summary>
@@ -600,16 +597,14 @@ incentive(){
             <div class="sim-field"><label>네이버 연동 수수료</label><div class="sim-input-wrap"><input class="sim-input" id="simNaverFee" type="number" step=".01" value="3.1" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
             <div class="sim-field"><label>계좌 포인트 수수료</label><div class="sim-input-wrap"><input class="sim-input" id="simBankFee" type="number" step=".1" value="6.1" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
             <div class="sim-field"><label>체크아웃 리워드</label><div class="sim-input-wrap"><input class="sim-input" id="simCheckout" type="number" step=".01" value=".1" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
-            <div class="sim-field"><label>텍스트 리뷰 작성률</label><div class="sim-input-wrap"><input class="sim-input" id="simTextReview" type="number" value="0" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
-            <div class="sim-field"><label>포토 리뷰 작성률</label><div class="sim-input-wrap"><input class="sim-input" id="simPhotoReview" type="number" value="0" oninput="simCalc()"><span class="sim-unit">%</span></div></div>
           </div>
-          <p class="sim-note">문자 매출 50P×유료문자(온라인 0.56건·계좌 2.19건), 문자 원가 5.5원×전체문자(온라인 3.14건·계좌 3.71건), 리뷰 포인트는 텍스트 101P·포토 202P로 계산합니다.</p>
+          <p class="sim-note">문자와 리뷰 포인트는 예약 건수가 있어야 산출할 수 있어 제외합니다. 최종 매출액에 직접 연동되는 수수료·PG·체크아웃 비용만 계산합니다.</p>
         </details>
       </div>
       <div id="simType2Inputs" class="sim-hidden">
-        <div class="sim-field"><label for="simGmv13">1~3개월 거래액</label><div class="sim-input-wrap"><input class="sim-input" id="simGmv13" type="number" min="0" step="100000" value="10000000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
-        <div class="sim-field"><label for="simGmv46">4~6개월 거래액</label><div class="sim-input-wrap"><input class="sim-input" id="simGmv46" type="number" min="0" step="100000" value="10000000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
-        <p class="sim-note">기본 10만원은 1회 지급하며, 추가 수당은 각 3개월 거래액 구간에 동일하게 적용합니다.</p>
+        <div class="sim-field"><label for="simGmv13">1~3개월 최종 매출액</label><div class="sim-input-wrap"><input class="sim-input" id="simGmv13" type="number" min="0" step="100000" value="10000000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
+        <div class="sim-field"><label for="simGmv46">4~6개월 최종 매출액</label><div class="sim-input-wrap"><input class="sim-input" id="simGmv46" type="number" min="0" step="100000" value="10000000" oninput="simCalc()"><span class="sim-unit">원</span></div></div>
+        <p class="sim-note">기본 10만원은 1회 지급하며, 추가 수당은 각 3개월 최종 매출 구간에 동일하게 적용합니다.</p>
       </div>
       <label class="sim-check"><input id="simIndependent" type="checkbox" onchange="simCalc()">독채 캠핑장 추가 수당 20만원 포함</label>
     </section>
@@ -624,10 +619,8 @@ incentive(){
       <div class="sim-breakdown" id="simType1Breakdown">
         <div class="sim-row"><span>현금 수수료 매출 · VAT 제외</span><strong id="simCashRevenue">0원</strong></div>
         <div class="sim-row"><span>계좌이체 포인트 수수료</span><strong id="simBankRevenue">0원</strong></div>
-        <div class="sim-row"><span>문자 발송 포인트</span><strong id="simSmsRevenue">0원</strong></div>
         <div class="sim-row"><span>PG·네이버 수수료</span><strong class="cost" id="simPaymentCost">-0원</strong></div>
-        <div class="sim-row"><span>문자 원가</span><strong class="cost" id="simSmsCost">-0원</strong></div>
-        <div class="sim-row"><span>체크아웃·리뷰 포인트</span><strong class="cost" id="simRewardCost">-0원</strong></div>
+        <div class="sim-row"><span>체크아웃 포인트</span><strong class="cost" id="simRewardCost">-0원</strong></div>
         <div class="sim-row total"><span>예상 공헌이익</span><strong id="simContribution2">0원</strong></div>
         <div class="sim-meter"><i id="simMeter" style="width:0"></i></div>
       </div>
@@ -639,7 +632,7 @@ incentive(){
         <div class="sim-row total"><span>예상 총 영업수당</span><strong id="simT2Total">0원</strong></div>
       </div>
       <div class="sim-next" id="simNext"></div>
-      <p class="sim-note" id="simWarning">실제 정산 시 취소·환불, 월별 PG 요율과 최종 지급 기준에 따라 달라질 수 있습니다. R/S 및 고정비는 제외합니다.</p>
+      <p class="sim-note" id="simWarning">최종 매출액은 이용 완료 후 취소·환불을 제외한 금액으로 입력합니다. 문자·리뷰 포인트, R/S 및 고정비는 제외합니다.</p>
     </section>
   </div>`;
 },
@@ -709,10 +702,10 @@ function simCalc(){
     guides.push(n13?'1차 다음 구간까지 <strong>'+simMoney(n13[0]-g13)+'</strong>':'1차 최고 구간 달성');
     guides.push(n46?'2차 다음 구간까지 <strong>'+simMoney(n46[0]-g46)+'</strong>':'2차 최고 구간 달성');
     simEl('simNext').innerHTML=guides.join(' · ');
-    simEl('simWarning').textContent=clawback?'6개월 누적 거래액 300만원 미만으로 기본 10만원 환수를 적용했습니다. 추가 수당 환수 여부는 최종 지침 확인이 필요합니다.':'구간 경계는 하한 이상으로 계산했습니다. 독채 추가 수당의 중복 지급 여부는 최종 지침을 확인하세요.';
+    simEl('simWarning').textContent=clawback?'6개월 누적 최종 매출액 300만원 미만으로 기본 10만원 환수를 적용했습니다. 추가 수당 환수 여부는 최종 지침 확인이 필요합니다.':'최종 매출 구간 경계는 하한 이상으로 계산했습니다. 독채 추가 수당의 중복 지급 여부는 최종 지침을 확인하세요.';
     return;
   }
-  const gmv=simVal('simGmv'),feeExVat=simVal('simFee')/100,avg=Math.max(1,simVal('simAvg'));
+  const gmv=simVal('simGmv'),feeExVat=simVal('simFee')/100;
   simEl('simVatInfo').innerHTML='입력 수수료 <strong>'+((feeExVat*100).toFixed(1))+'%</strong> + VAT 10% = 고객 적용 요율 <strong>'+((feeExVat*110).toFixed(1))+'%</strong>';
   let online=simVal('simOnline'),naver=simVal('simNaver'),bank=simVal('simBank');
   let shareTotal=online+naver+bank;
@@ -720,16 +713,11 @@ function simCalc(){
   simEl('simShareInfo').textContent='현재 합계 '+shareTotal.toLocaleString('ko-KR')+'%'+(shareTotal===100?'':' · 입력 비율대로 자동 보정');
   simEl('simShareInfo').style.color=shareTotal===100?'var(--text2)':'var(--orange)';
   const onlineGmv=gmv*online/shareTotal,naverGmv=gmv*naver/shareTotal,bankGmv=gmv*bank/shareTotal;
-  const bookings=gmv/avg,onlineBookings=bookings*(online+naver)/shareTotal,bankBookings=bookings*bank/shareTotal;
   const cashRevenue=(onlineGmv+naverGmv)*feeExVat;
   const bankRevenue=bankGmv*simVal('simBankFee')/100;
-  const smsRevenue=(onlineBookings*.56+bankBookings*2.19)*50;
   const paymentCost=onlineGmv*simVal('simPg')/100+naverGmv*simVal('simNaverFee')/100;
-  const smsCost=(onlineBookings*3.14+bankBookings*3.71)*5.5;
-  const checkoutCost=(onlineGmv+naverGmv)*simVal('simCheckout')/100;
-  const reviewCost=onlineBookings*(simVal('simTextReview')/100*101+simVal('simPhotoReview')/100*202);
-  const rewardCost=checkoutCost+reviewCost;
-  const contribution=cashRevenue+bankRevenue+smsRevenue-paymentCost-smsCost-rewardCost;
+  const rewardCost=(onlineGmv+naverGmv)*simVal('simCheckout')/100;
+  const contribution=cashRevenue+bankRevenue-paymentCost-rewardCost;
   const margin=gmv?contribution/gmv*100:0,bonus=Math.max(0,Math.min(5000000,contribution*.1)),total=100000+bonus+independent;
   simEl('simTotal').textContent=simMoney(total);
   simEl('simContribution').textContent=simMoney(contribution);
@@ -739,14 +727,12 @@ function simCalc(){
   simEl('simExtra').textContent=simMoney(bonus+independent);
   simEl('simCashRevenue').textContent=simMoney(cashRevenue);
   simEl('simBankRevenue').textContent=simMoney(bankRevenue);
-  simEl('simSmsRevenue').textContent=simMoney(smsRevenue);
   simEl('simPaymentCost').textContent='-'+simMoney(paymentCost);
-  simEl('simSmsCost').textContent='-'+simMoney(smsCost);
   simEl('simRewardCost').textContent='-'+simMoney(rewardCost);
   simEl('simContribution2').textContent=simMoney(contribution);
   simEl('simMeter').style.width=Math.max(0,Math.min(100,margin/15*100))+'%';
   simEl('simNext').innerHTML=bonus>=5000000?'<strong>추가 수당 상한 달성</strong> · 추가 수당 500만원이 적용됩니다.':'<strong>추가 수당 상한까지 공헌이익 '+simMoney(Math.max(0,50000000-contribution))+' 남음</strong> · 현재 추가 수당은 '+simMoney(bonus)+'입니다.';
-  simEl('simWarning').textContent='실제 정산 시 취소·환불, 월별 PG 요율과 최종 지급 기준에 따라 달라질 수 있습니다. R/S 및 고정비는 제외합니다.';
+  simEl('simWarning').textContent='최종 매출액은 이용 완료 후 취소·환불을 제외한 금액으로 입력합니다. 문자·리뷰 포인트, R/S 및 고정비는 제외합니다.';
 }
 
 // === 온라인 RS 분석 ===
