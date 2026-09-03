@@ -8,7 +8,16 @@
   const load=()=>{try{return JSON.parse(localStorage.getItem(key())||'{"clients":[],"items":[],"logs":[]}')}catch(e){return{clients:[],items:[],logs:[]}}};
   const save=s=>localStorage.setItem(key(),JSON.stringify(s));
   const month=d=>String(d||'').slice(0,7);
-  function campNames(){try{return [...new Set((window.D?.camps||[]).map(c=>c.n).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'))}catch(e){return[]}}
+  function campNames(){
+    try{
+      const names=[];
+      (window.D?.camps||[]).forEach(c=>{if(c?.n)names.push(c.n)});
+      (window.D?.monthly||[]).forEach(r=>{if(r?.n)names.push(r.n)});
+      try{(typeof window.cmLoad==='function'?window.cmLoad():[]).forEach(c=>{if(c?.name)names.push(c.name)})}catch(e){}
+      try{load().clients.forEach(c=>{if(c?.name)names.push(c.name)})}catch(e){}
+      return [...new Set(names.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+    }catch(e){return[]}
+  }
   function seed(){
     const s=load();
     if(!s.clients.length){
@@ -64,7 +73,7 @@
     </div>
     <div class="grid2">
       <div class="panel"><h3><span class="icon" style="background:var(--accent)"></span>거래처 등록</h3>
-        <div class="filter-row"><div style="position:relative;flex:1;min-width:240px"><input class="search" id="monClientName" placeholder="캠핑장명 또는 키워드 입력..." autocomplete="off" oninput="monClientAutoComplete()" style="width:100%"><div id="monClientAC" style="position:absolute;top:100%;left:0;width:100%;max-height:240px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;display:none;z-index:70;box-shadow:0 12px 30px rgba(0,0,0,.24)"></div></div><button class="btn btn-green" onclick="monAddClient()">추가</button></div>
+        <div class="filter-row"><div style="position:relative;flex:1;min-width:240px"><input class="search" id="monClientName" placeholder="캠핑장명 또는 키워드 입력..." autocomplete="off" oninput="monClientAutoComplete()" onfocus="monClientAutoComplete()" style="width:100%"><div id="monClientAC" style="position:absolute;top:100%;left:0;width:100%;max-height:240px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;display:none;z-index:70;box-shadow:0 12px 30px rgba(0,0,0,.24)"></div></div><button class="btn btn-green" onclick="monAddClient()">추가</button></div>
         <div id="monClientList"></div>
       </div>
       <div class="panel"><h3><span class="icon" style="background:var(--green)"></span>발견 글 등록</h3>
@@ -83,12 +92,14 @@
     const input=document.getElementById('monClientName');
     const ac=document.getElementById('monClientAC');
     if(!input||!ac)return;
-    const q=input.value.trim().toLowerCase();
+    const raw=input.value.trim();
+    const q=raw.toLowerCase().replace(/\s+/g,'');
     const selected=new Set(load().clients.map(c=>c.name));
     if(!q){ac.style.display='none';return}
-    const matches=campNames().filter(n=>!selected.has(n)&&n.toLowerCase().includes(q)).slice(0,12);
-    if(!matches.length){ac.innerHTML='<div style="padding:12px 14px;color:var(--text2);font-size:13px">검색 결과가 없습니다.</div>';ac.style.display='block';return}
-    ac.innerHTML=matches.map(n=>{const d=clientData(n);return `<div style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);color:var(--text)" onmouseover="this.style.background='var(--card2)'" onmouseout="this.style.background=''" onclick="monPickClient('${esc(n)}')"><strong style="font-size:13px">${esc(n)}</strong><div style="font-size:11px;color:var(--text2);margin-top:3px">${esc(d.region)} · ${esc(d.plan)} · 최근 ${fmtMoney(d.pay)}</div></div>`}).join('');
+    const pool=campNames();
+    const matches=pool.filter(n=>n.toLowerCase().replace(/\s+/g,'').includes(q)).slice(0,15);
+    if(!matches.length){ac.innerHTML='<div style="padding:12px 14px;color:var(--text2);font-size:13px">검색 결과가 없습니다. 거래처 목록/정산 데이터를 먼저 불러왔는지 확인해주세요.</div>';ac.style.display='block';return}
+    ac.innerHTML=matches.map(n=>{const d=clientData(n);const registered=selected.has(n);return `<div style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);color:var(--text)" onmouseover="this.style.background='var(--card2)'" onmouseout="this.style.background=''" onclick="monPickClient('${esc(n)}')"><strong style="font-size:13px">${esc(n)}</strong>${registered?' <span class="tag tag-blue">등록됨</span>':''}<div style="font-size:11px;color:var(--text2);margin-top:3px">${esc(d.region||'지역 정보 없음')} · ${esc(d.plan)} · 최근 ${fmtMoney(d.pay)}</div></div>`}).join('');
     ac.style.display='block';
   };
   window.monPickClient=function(name){const input=document.getElementById('monClientName');const ac=document.getElementById('monClientAC');if(input)input.value=name;if(ac)ac.style.display='none'};
@@ -105,6 +116,7 @@
   function itemCard(i,history){const tag=i.sentiment==='주의'?'tag-red':i.sentiment==='긍정'?'tag-green':'tag-blue';const text=esc(kakaoMessage(i)).replace(/\n/g,'<br>');return `<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;background:${history?'var(--bg)':'rgba(245,158,11,.06)'}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>${esc(i.client)}</strong> <span class="tag ${tag}">${esc(i.sentiment)}</span> <span style="color:var(--text2);font-size:11px">${esc(i.date)} · ${esc(i.source)}</span><div style="margin-top:7px"><a class="camp-link" target="_blank" rel="noopener" href="${esc(i.url||'#')}">${esc(i.title)}</a></div><p style="color:var(--text2);font-size:12px;line-height:1.55;margin-top:6px;white-space:normal">${esc(i.summary||'메모 없음')}</p></div><button class="btn-del" onclick="monDeleteItem('${i.id}')">삭제</button></div><details style="margin-top:10px"><summary style="cursor:pointer;color:var(--accent);font-size:12px;font-weight:700">카카오 발송 문안 보기</summary><div class="msg-template" style="white-space:normal;margin-top:8px">${text}</div></details>${history?`<div style="margin-top:10px;color:var(--text2);font-size:12px">상태: ${i.status==='sent'?'발송완료 '+esc(i.sentAt||''):'보류 '+esc(i.skippedAt||'')}</div>`:`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" onclick="monCopyMessage('${i.id}')">문안 복사</button><button class="btn btn-green" onclick="monMark('${i.id}','sent')">발송완료</button><button class="btn" style="background:var(--card2);color:var(--text)" onclick="monMark('${i.id}','skipped')">보류</button></div>`}</div>`}
   function renderItems(){const s=load();const pending=document.getElementById('monPendingList');const history=document.getElementById('monHistoryList');if(!pending||!history)return;const p=s.items.filter(i=>i.status==='pending');const h=s.items.filter(i=>i.status!=='pending').slice(0,20);pending.innerHTML=p.map(i=>itemCard(i,false)).join('')||'<div style="color:var(--text2);text-align:center;padding:26px">승인 대기 항목이 없습니다. 오늘 검색을 열어 새 글을 등록하세요.</div>';history.innerHTML=h.map(i=>itemCard(i,true)).join('')||'<div style="color:var(--text2);text-align:center;padding:22px">아직 발송/보류 이력이 없습니다.</div>'}
 })();
+
 
 
 
