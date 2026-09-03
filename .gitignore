@@ -1,3 +1,5 @@
 admin-seed.json
 prepare_secure_data.mjs
 .firebase/
+node_modules/
+firebase-debug*.log

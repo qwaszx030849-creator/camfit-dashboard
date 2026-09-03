@@ -1,0 +1,10 @@
+{
+  "name": "camfit-md-dashboard",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "briefing": "node scripts/refresh-briefing.cjs",
+    "deploy": "firebase deploy --only hosting --project camfit-md-dashboard-phj"
+  },
+  "devDependencies": { "firebase-tools": "15.28.2" }
+}
