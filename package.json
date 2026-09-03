@@ -4,7 +4,9 @@
   "scripts": {
     "test": "node --test tests/*.test.cjs",
     "briefing": "node scripts/refresh-briefing.cjs",
+    "monitoring": "node scripts/collect-monitoring.cjs",
     "deploy": "firebase deploy --only hosting --project camfit-md-dashboard-phj"
   },
   "devDependencies": { "firebase-tools": "15.28.2" }
 }
+
