@@ -5,6 +5,46 @@ const NOW='2026-09-03T06:00:00Z',SOURCE='2026-09-03T05:00:00Z';
 const row=(y,m,name,pay,refund=0)=>[y,m,name,1,pay,refund,0,0,0,0,0,999999,777777,999999];
 function sample(){return{raw:{camps:[{n:'A',rv:12,l:'https://camfit.co.kr/camp/a'},{n:'B',rv:0},{n:'C',rv:3}],monthly:[row(2026,7,'A',100,10),row(2026,8,'A',60,10),row(2026,7,'B',0),row(2026,8,'B',100),row(2026,7,'C',40),row(2026,9,'A',1)]},onlineRS:[]};}
 function build(p=sample(),prev){return core.build(p,prev,{now:NOW,sourceUpdatedAt:SOURCE});}
+function issueRow(name,sales={}){
+  return{name,sales:{current:null,previous:null,diff:null,rate:null,state:'unavailable',...sales},reviews:{status:'not_connected',delta:null,items:[]},photos:{status:'not_connected'},events:{status:'not_connected',items:[]},mentions:[]};
+}
+const issueReport=rows=>({rows,sourceUpdatedAt:SOURCE,period:{kind:'month',current:'2026-08',incomplete:false}});
+test('issue-free, missing, first baseline, small swings and indexed old posts are excluded',()=>{
+  const rows=[issueRow('missing'),issueRow('small',{diff:-99999,rate:-99}),issueRow('stable',{diff:999999,rate:10})];
+  rows[0].photos={status:'baseline',checkedAt:SOURCE,count:1};
+  rows[0].mentions=[{verification:'indexed',publishedAt:'2026-09-02',checkedAt:SOURCE},{verification:'read',publishedAt:'2025-09-02',checkedAt:SOURCE}];
+  assert.equal(core.selectBriefingRows(issueReport(rows),NOW).length,0);
+  assert.equal(build().report.summary.briefingCount,0);
+});
+test('priority sorts urgent first then material impact, with explicit reasons',()=>{
+  const rows=[issueRow('growth',{diff:9000000,rate:50}),issueRow('moderate',{diff:-500000,rate:-30}),issueRow('urgent small',{diff:-1200000,rate:-60}),issueRow('urgent large',{diff:-5000000,rate:-60})];
+  const selected=core.selectBriefingRows(issueReport(rows),NOW);
+  assert.deepEqual(selected.map(r=>r.name),['urgent large','urgent small','moderate','growth']);
+  selected.forEach(r=>assert.ok(r.priority.reasons.length));
+});
+test('null rating is not negative; low review is urgent; expired signals disappear',()=>{
+  const r=issueRow('reviews');r.reviews={status:'ok',checkedAt:SOURCE,items:[{date:'2026-09-02',text:'내용',rating:null}]};
+  assert.equal(core.selectBriefingRows(issueReport([r]),NOW)[0].priority.level,1);
+  r.reviews.items[0].rating=2;
+  assert.equal(core.selectBriefingRows(issueReport([r]),NOW)[0].priority.level,3);
+  assert.equal(core.selectBriefingRows(issueReport([r]),'2026-09-20T06:00:00Z').length,0);
+});
+test('photo changes, ending events, recent verified external posts qualify; stale sales do not',()=>{
+  const photo=issueRow('photo');photo.photos={status:'ok',checkedAt:SOURCE,added:[],removed:[],mainChanged:true};
+  const event=issueRow('event');event.events={status:'ok',checkedAt:SOURCE,items:[{start:'2026-09-01',end:'2026-09-05',title:'행사'}]};
+  const post=issueRow('post');post.mentions=[{verification:'read',publishedAt:'2026-09-02',checkedAt:SOURCE}];
+  const selected=core.selectBriefingRows(issueReport([photo,event,post]),NOW);
+  assert.equal(selected.length,3);assert.equal(selected[0].name,'event');
+  const stale=issueReport([issueRow('stale',{diff:-5000000,rate:-80})]);stale.period.current='2026-06';
+  assert.equal(core.selectBriefingRows(stale,NOW).length,0);
+});
+test('new revenue and recent cumulative review changes expire or qualify independently',()=>{
+  const r=issueRow('new',{current:100000,previous:0,diff:100000,rate:null,state:'new'});
+  assert.deepEqual(core.selectBriefingRows(issueReport([r]),NOW)[0].priority.types,['growth']);
+  const count=issueRow('count');count.reviews.delta=1;
+  assert.equal(core.selectBriefingRows(issueReport([count]),NOW).length,1);
+  assert.equal(core.selectBriefingRows(issueReport([count]),'2026-09-20T06:00:00Z').length,0);
+});
 test('external posts retain real checked dates, verification and history without implying photo changes',()=>{
   const item={title:'후기',url:'https://example.com/post',publishedAt:'2026-08-25',checkedAt:'2026-09-03T05:00:00Z',kind:'소개·추천글',summary:'요약',verification:'indexed',evidenceUrl:'https://example.com/list'};
   const externalSources={'https://camfit.co.kr/camp/a':[item,{...item,url:'https://example.com/old',publishedAt:'2025-05-20'},{...item,url:'javascript:alert(1)'},{...item,url:'https://example.com/future',publishedAt:'2027-01-01'}]};
@@ -99,4 +139,16 @@ test('UI escapes untrusted text; settlement merging is idempotent',()=>{
 test('server scripts and tests are excluded from public hosting',()=>{
   const config=JSON.parse(fs.readFileSync(require.resolve('../firebase.json'),'utf8'));
   ['scripts/**','tests/**','node_modules/**','package.json','pnpm-lock.yaml'].forEach(x=>assert.ok(config.hosting.ignore.includes(x)));
+});
+test('card renderer excludes quiet clients in every filter and explains importance',()=>{
+  const report=issueReport([issueRow('조용한 업체'),issueRow('중요 업체',{current:1000000,previous:3000000,diff:-2000000,rate:-66.7})]);
+  const elements={briefCards:{innerHTML:'',insertAdjacentHTML(){}},briefSearch:{value:''},briefFilter:{value:'all'},briefCount:{}};
+  const ctx=vm.createContext({BriefingCore:{...core,selectBriefingRows:r=>core.selectBriefingRows(r,NOW)},isHidden:()=>false,document:{getElementById:id=>elements[id]},report});
+  vm.runInContext(fs.readFileSync(require.resolve('../briefing-ui.js'),'utf8'),ctx);
+  vm.runInContext('briefingState={report};renderBriefingCards()',ctx);
+  assert.match(elements.briefCards.innerHTML,/중요 업체/);assert.doesNotMatch(elements.briefCards.innerHTML,/조용한 업체/);
+  assert.match(elements.briefCards.innerHTML,/우선 확인/);
+  elements.briefFilter.value='reviews';
+  vm.runInContext('renderBriefingCards()',ctx);
+  assert.doesNotMatch(elements.briefCards.innerHTML,/<article/);assert.match(elements.briefCards.innerHTML,/주요 이슈가 없습니다/);
 });

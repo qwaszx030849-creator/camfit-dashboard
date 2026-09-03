@@ -7,7 +7,7 @@ function briefingTab(){
   return '<div class="brief-head"><div><h2>거래처 브리핑</h2><p>최근 리뷰 · 사진 변경 · 진행 이벤트 · 매출 증감</p></div><button class="btn btn-primary" id="briefRefresh" onclick="refreshBriefingNow()">저장 데이터로 새로고침</button></div>'+
     '<div class="brief-status" id="briefStatus" role="status" aria-live="polite">브리핑을 불러오는 중입니다.</div><p class="brief-meta">오전 9시 자동 갱신·알림은 현재 PC의 Codex 예약 실행입니다. PC와 앱이 실행 중이어야 하며, 실패 시 마지막 정상 결과가 유지됩니다.</p>'+
     '<div id="briefSummary" class="kpi-row"></div><div id="briefWeekly" class="panel"></div>'+
-    '<div class="brief-notice">캠핏 링크·거래처명·주소를 대조한 공개 후기와 블로그 글을 함께 정리합니다. 블로그 사진은 캠핏 사진 변경으로 간주하지 않습니다. 캠핏 본문·사진·이벤트 직접 수집은 아직 미연동이며, 미연동은 “변경 없음”을 뜻하지 않습니다.</div>'+
+    '<div class="brief-notice">브리핑할 이슈가 있는 거래처만 중요도 → 매출 영향액 순으로 표시합니다. 매출은 20% 이상·10만 원 이상 변동, 외부 글은 최근 7일 원문 확인 건이 기준입니다. 과거 글·원문 미확인·자료 부족·미연동만 있는 거래처는 제외합니다. 캠핏 직접 수집은 미연동이며 “변경 없음”을 뜻하지 않습니다.</div>'+
     '<div class="filter-row"><input class="search" id="briefSearch" aria-label="브리핑 거래처 검색" placeholder="거래처 이름 검색" oninput="renderBriefingCards()"><select id="briefFilter" aria-label="브리핑 유형" onchange="renderBriefingCards()"><option value="all">전체 거래처</option><option value="decline">매출 20% 이상 감소</option><option value="growth">매출 20% 이상 증가</option><option value="reviews">리뷰 증가 / 최근 리뷰</option><option value="photos">사진 변경</option><option value="events">진행 이벤트</option></select><span id="briefCount"></span></div>'+
     '<p id="briefPeriod" class="brief-meta"></p><div id="briefCards" class="brief-grid"></div>';
 }
@@ -84,13 +84,15 @@ function renderBriefingUI(){
   el.classList.toggle('brief-error',!!briefingError);
   if(r)el.textContent+=' · 외부 글 확보 '+(r.summary.externalCamps||0)+'/'+r.summary.total+'개 거래처 (전체 수집 완료 아님)';
   const filterEl=document.getElementById('briefFilter');
+  if(filterEl)filterEl.querySelector('option[value="all"]').textContent='전체 주요 이슈';
   if(filterEl&&!filterEl.querySelector('option[value="mentions"]'))filterEl.insertAdjacentHTML('beforeend','<option value="mentions">외부 후기·블로그 있음</option>');
-  const rows=(r?.rows||[]).filter(x=>!isHidden(x.name));
+  const allRows=(r?.rows||[]).filter(x=>!isHidden(x.name));
+  const rows=BriefingCore.selectBriefingRows(r).filter(x=>!isHidden(x.name));
   const kpis=[
-    ['브리핑 거래처',rows.length+'개'],
-    ['매출 20% 이상 감소',rows.filter(x=>x.sales.state==='decline').length+'개'],
-    ['매출 20% 이상 증가',rows.filter(x=>x.sales.state==='growth').length+'개'],
-    ['외부 정보 연동 필요',rows.filter(x=>[x.reviews,x.photos,x.events].some(y=>y.status==='not_connected')).length+'개']
+    ['브리핑 대상',rows.length+'개'],
+    ['우선 확인',rows.filter(x=>x.priority.level===3).length+'개'],
+    ['주요 매출 감소',rows.filter(x=>x.priority.types.includes('decline')).length+'개'],
+    ['노출 기준 미충족',(allRows.length-rows.length)+'개']
   ];
   document.getElementById('briefSummary').innerHTML=kpis.map(([label,value])=>'<div class="kpi"><div class="label">'+label+'</div><div class="value">'+value+'</div></div>').join('');
   document.getElementById('briefPeriod').textContent=r?'매출 비교: '+r.period.previous+' → '+r.period.current+' · '+r.period.note:'';
@@ -99,7 +101,7 @@ function renderBriefingUI(){
   renderBriefingCards();
 }
 function briefReviewHTML(review){
-  const count=review.count===null?'누적 리뷰 수 없음':'누적 '+review.count.toLocaleString()+'건';
+  const count=review.count==null?'누적 리뷰 수 없음':'누적 '+review.count.toLocaleString()+'건';
   const delta=review.delta===null?'첫 비교 기준 저장':review.delta>0?'이전 자료 대비 +'+review.delta+'건':review.delta<0?'이전 자료 대비 '+review.delta+'건':'누적 수 변화 없음';
   return '<strong>'+count+'</strong><p>'+delta+'</p>'+(review.status==='ok'?review.items.map(i=>'<p class="brief-review">'+briefEsc(i.text)+'<span class="brief-meta">'+briefTime(i.date)+'</span></p>').join('')||'<p>확인된 최근 7일 리뷰 없음</p>':'<span class="tag tag-orange">최근 본문 연동 필요</span>');
 }
@@ -119,17 +121,17 @@ function briefMentionsHTML(items){
 function renderBriefingCards(){
   const target=document.getElementById('briefCards');if(!target)return;
   const q=(document.getElementById('briefSearch')?.value||'').trim().toLowerCase(),filter=document.getElementById('briefFilter')?.value||'all';
-  const rows=(briefingState?.report?.rows||[]).filter(r=>!isHidden(r.name)&&r.name.toLowerCase().includes(q)).filter(r=>filter==='all'||filter==='decline'&&r.sales.state==='decline'||filter==='growth'&&r.sales.state==='growth'||filter==='reviews'&&(r.reviews.delta>0||r.reviews.items.length)||filter==='photos'&&r.photos.status==='ok'&&(r.photos.added.length||r.photos.removed.length||r.photos.mainChanged)||filter==='events'&&r.events.items.length||filter==='mentions'&&r.mentions?.length);
+  const rows=BriefingCore.selectBriefingRows(briefingState?.report).filter(r=>!isHidden(r.name)&&r.name.toLowerCase().includes(q)).filter(r=>filter==='all'||r.priority.types.includes(filter));
   document.getElementById('briefCount').textContent=rows.length+'개 거래처';
   target.innerHTML=rows.slice(0,100).map(r=>{
     const s=r.sales;
     const change=s.diff===null?'비교 자료 부족':s.state==='new'?'이전 0원 → 매출 발생':s.rate===null?'기준 매출 0원 이하 · 증감률 제외':(s.rate>=0?'+':'')+s.rate.toFixed(1)+'%';
     const diff=s.diff===null?'':(s.diff>=0?'+':'')+briefMoney(s.diff);
     const href=BriefingCore.safeUrl(r.url);
-    return '<article class="brief-card"><div class="brief-card-head"><h3>'+briefEsc(r.name)+'</h3>'+(href?'<a class="camp-link" href="'+briefEsc(href)+'" target="_blank" rel="noopener noreferrer">거래처 보기 ↗</a>':'')+'</div>'+
+    return '<article class="brief-card"><div class="brief-card-head"><h3>'+briefEsc(r.name)+'</h3>'+(href?'<a class="camp-link" href="'+briefEsc(href)+'" target="_blank" rel="noopener noreferrer">거래처 보기 ↗</a>':'')+'</div><div class="brief-notice"><strong>'+briefEsc(r.priority.label)+'</strong><p>'+r.priority.reasons.map(briefEsc).join(' · ')+'</p></div>'+
       '<div class="brief-sales"><span>환불 제외 결제매출</span><strong class="'+(s.diff<0?'down':s.diff>0?'up':'')+'">'+change+'</strong><span>'+briefMoney(s.previous)+' → '+briefMoney(s.current)+'</span><span>'+diff+'</span></div>'+
       '<div class="brief-details"><section><h4>최근 리뷰</h4>'+briefReviewHTML(r.reviews)+'</section><section><h4>사진 변경</h4>'+briefPhotoHTML(r.photos)+'</section><section><h4>진행 이벤트</h4>'+briefEventHTML(r.events)+'</section></div>'+briefMentionsHTML(r.mentions)+'</article>';
-  }).join('')||'<div class="panel">조건에 맞는 거래처가 없습니다. 미연동 항목은 수집 후 확인할 수 있습니다.</div>';
+  }).join('')||'<div class="panel">현재 조건에서 브리핑할 주요 이슈가 없습니다. 자료 부족·미연동 여부는 전체 변경 없음으로 해석하지 않습니다.</div>';
   if(rows.length>100)target.insertAdjacentHTML('beforeend','<div class="brief-meta">처음 100개를 표시합니다. 거래처 이름이나 유형으로 범위를 좁혀 주세요.</div>');
 }
 function mergeBriefingSettlements(base={},incoming={}){

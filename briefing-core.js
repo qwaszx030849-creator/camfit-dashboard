@@ -59,6 +59,43 @@
     const age=new Date(now)-new Date(feed.collectedAt);
     return age>=0&&age<=7*DAY?feed:null;
   }
+  function priorityFor(row,report={},now=new Date()){
+    const time=new Date(now),today=koreanDate(time),reasons=[],types=[];
+    const fresh=(value,days=7)=>!!iso(value)&&time-new Date(value)>=0&&time-new Date(value)<=days*DAY;
+    let level=0;
+    const add=(type,text,rank)=>{types.push(type);reasons.push(text);level=Math.max(level,rank);};
+    const s=row.sales||{},period=report.period||{};
+    let end=period.current?.split(' ~ ').at(-1);
+    if(period.kind==='month'&&/^\d{4}-\d{2}$/.test(end||'')){
+      const [y,m]=end.split('-').map(Number);end=new Date(Date.UTC(y,m,0)).toISOString().slice(0,10);
+    }
+    const salesFresh=!period.incomplete&&settledDate(end)&&fresh(end+'T00:00:00+09:00',period.kind==='week'?14:45);
+    const impact=salesFresh?Math.abs(num(s.diff)):0;
+    if(salesFresh&&s.diff!==null&&impact>=100000){
+      if(s.rate!==null&&s.rate<=-20)add('decline','매출 '+Math.abs(s.rate).toFixed(1)+'% 감소 · '+Math.round(impact).toLocaleString('ko-KR')+'원 감소',s.rate<=-50&&impact>=1000000?3:2);
+      else if(s.rate!==null&&s.rate>=20)add('growth','매출 '+s.rate.toFixed(1)+'% 증가 · '+Math.round(impact).toLocaleString('ko-KR')+'원 증가',1);
+      else if(s.state==='new')add('growth','이전 0원 대비 매출 발생 · '+Math.round(impact).toLocaleString('ko-KR')+'원',1);
+    }
+    const reviews=row.reviews||{};
+    const recentReviews=reviews.status==='ok'&&fresh(reviews.checkedAt)?(reviews.items||[]).filter(r=>fresh(r.date)&&String(r.text||'').trim()):[];
+    const low=recentReviews.filter(r=>r.rating!==null&&Number(r.rating)>=1&&Number(r.rating)<=2);
+    if(low.length)add('reviews','최근 7일 평점 2점 이하 리뷰 '+low.length+'건',3);
+    else if(recentReviews.length)add('reviews','최근 7일 원문 확인 리뷰 '+recentReviews.length+'건',1);
+    else if(reviews.delta>0&&fresh(report.sourceUpdatedAt))add('reviews','누적 리뷰 '+reviews.delta+'건 증가 · 본문 미확인',1);
+    const photos=row.photos||{};
+    if(photos.status==='ok'&&fresh(photos.checkedAt)&&(photos.mainChanged||photos.added?.length||photos.removed?.length))add('photos',photos.mainChanged?'캠핏 대표 사진 변경':'캠핏 사진 추가·삭제 확인',1);
+    const events=row.events||{};
+    const activeEvents=events.status==='ok'&&fresh(events.checkedAt)?(events.items||[]).filter(e=>settledDate(e.start)&&settledDate(e.end)&&e.start<=today&&e.end>=today):[];
+    const ending=activeEvents.filter(e=>Date.parse(e.end+'T00:00:00+09:00')-Date.parse(today+'T00:00:00+09:00')<=3*DAY);
+    if(activeEvents.length)add('events',ending.length?'3일 내 종료 이벤트 '+ending.length+'건':'진행 중 이벤트 '+activeEvents.length+'건',ending.length?2:1);
+    const posts=(row.mentions||[]).filter(m=>m.verification==='read'&&fresh(m.checkedAt)&&fresh(m.publishedAt+'T00:00:00+09:00'));
+    if(posts.length)add('mentions','최근 7일 원문 확인 외부 글 '+posts.length+'건',1);
+    return{eligible:reasons.length>0,level,label:level===3?'우선 확인':level===2?'중요 변동':'업데이트',impact,reasons,types};
+  }
+  function selectBriefingRows(report,now=new Date()){
+    return(report?.rows||[]).map(row=>({...row,priority:priorityFor(row,report,now)})).filter(r=>r.priority.eligible).sort((a,b)=>
+      b.priority.level-a.priority.level||b.priority.impact-a.priority.impact||b.priority.reasons.length-a.priority.reasons.length||a.name.localeCompare(b.name,'ko'));
+  }
   function onlineRsSummary(payload,now){
     const today=koreanDate(now),rows=(payload.onlineRS||[]).map(r=>({date:settledDate(r[1]),rs:num(r[4])})).filter(r=>r.date&&r.date<=today);
     if(!rows.length)return null;
@@ -83,7 +120,7 @@
       const reviews={status:feed?.reviews?.status==='ok'?'ok':'not_connected',count,delta,items:[]};
       if(reviews.status==='ok'){
         reviews.checkedAt=feed.collectedAt;
-        reviews.items=(feed.reviews.items||[]).filter(r=>iso(r.date)&&new Date(r.date)<=new Date(now)&&new Date(r.date)>=new Date(now)-7*DAY).slice(0,10).map(r=>({date:iso(r.date),text:String(r.text||'').slice(0,500),rating:Number.isFinite(Number(r.rating))?Number(r.rating):null,url:safeUrl(r.url)}));
+        reviews.items=(feed.reviews.items||[]).filter(r=>iso(r.date)&&new Date(r.date)<=new Date(now)&&new Date(r.date)>=new Date(now)-7*DAY).slice(0,10).map(r=>({date:iso(r.date),text:String(r.text||'').slice(0,500),rating:r.rating!==null&&Number(r.rating)>=1&&Number(r.rating)<=5?Number(r.rating):null,url:safeUrl(r.url)}));
       }
       let photos={status:'not_connected'};
       if(feed?.photos?.status==='ok'&&Array.isArray(feed.photos.urls)){
@@ -115,6 +152,9 @@
     const period={kind:data.kind,current:data.currentLabel,previous:data.previousLabel,incomplete:data.incomplete,note:data.note};
     summary.externalCamps=rows.filter(r=>r.mentions.length).length;
     summary.recentMentions=rows.reduce((s,r)=>s+r.mentions.filter(m=>m.recent).length,0);
+    const shortlisted=selectBriefingRows({rows,period,sourceUpdatedAt},now);
+    summary.briefingCount=shortlisted.length;summary.excluded=rows.length-shortlisted.length;
+    summary.urgent=shortlisted.filter(r=>r.priority.level===3).length;
     return{report:{generatedAt:now,sourceUpdatedAt,reason:options.reason||'새로고침',period,summary,onlineRs:onlineRsSummary(payload,now),rows},snapshot:{sourceUpdatedAt,checkedAt:now,camps:snapshot,externalSources}};
   }
   function nextThursday(now=new Date()){
@@ -129,5 +169,5 @@
     if(next<=time.getTime())next+=DAY;
     return new Date(next).toISOString();
   }
-  return{build,salesData,revenue,safeUrl,campKey,monthKey,previousMonth,nextThursday,nextDaily,koreanDate,settledDate,onlineRsSummary};
+  return{build,salesData,revenue,safeUrl,campKey,monthKey,previousMonth,nextThursday,nextDaily,koreanDate,settledDate,onlineRsSummary,priorityFor,selectBriefingRows};
 });

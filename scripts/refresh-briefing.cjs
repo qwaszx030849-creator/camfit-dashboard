@@ -1,6 +1,6 @@
 'use strict';
 const {context}=require('./firebase-context.cjs');
-const {build,campKey,safeUrl,settledDate,koreanDate}=require('../briefing-core.js');
+const {build,campKey,safeUrl,settledDate,koreanDate,selectBriefingRows}=require('../briefing-core.js');
 async function main(){
   const c=await context(),source=await c.load();
   if(!source.payload)throw new Error('저장된 대시보드 데이터가 없습니다.');
@@ -23,13 +23,15 @@ async function main(){
   const next=build(source.payload,previous.payload?.snapshot,{sourceUpdatedAt:source.meta.updatedAt,reason,externalSources});
   if(process.argv.includes('--candidates')){
     const camps=source.payload.raw.camps.filter(x=>safeUrl(x.l)).sort((a,b)=>a.n.localeCompare(b.n,'ko'));
-    const priority=next.report.rows.filter(r=>r.sales.state==='decline').slice(0,5).map(r=>camps.find(c=>campKey(c)===r.key)).filter(Boolean);
+    const priority=selectBriefingRows(next.report).slice(0,5).map(r=>camps.find(c=>campKey(c)===r.key)).filter(Boolean);
     const offset=(Math.floor(Date.now()/86400000)*5)%Math.max(camps.length,1);
     const rotation=Array.from({length:Math.min(5,camps.length)},(_,i)=>camps[(offset+i)%camps.length]);
     console.log(JSON.stringify([...new Map([...priority,...rotation].map(c=>[campKey(c),{name:c.n,address:c.a,camfitUrl:c.l,existing:externalSources[campKey(c)]||[]}])).values()],null,2));return;
   }
   if(process.argv.includes('--write'))await c.saveBriefing(next,source.updateTime,reason,previous.meta?.version);
   const r=next.report;
-  console.log(JSON.stringify({saved:process.argv.includes('--write'),reason,generatedAt:r.generatedAt,sourceUpdatedAt:r.sourceUpdatedAt,sourceUnchanged:previous.payload?.report?.sourceUpdatedAt===r.sourceUpdatedAt,period:r.period,summary:r.summary,onlineRs:r.onlineRs,topDeclines:r.rows.filter(x=>x.sales.state==='decline').slice(0,5).map(x=>({name:x.name,rate:Math.round(x.sales.rate*10)/10,diff:x.sales.diff})),externalSources:'외부 글은 확인된 거래처만 제공하며, 캠핏 직접 수집과 구분합니다. 전체 거래처 검색 완료를 의미하지 않습니다.'},null,2));
+  const selected=selectBriefingRows(r);
+  console.log(JSON.stringify({topBriefings:selected.slice(0,10).map(x=>({name:x.name,importance:x.priority.label,reasons:x.priority.reasons})),visible:selected.length,excluded:r.rows.length-selected.length},null,2));
+  console.log(JSON.stringify({saved:process.argv.includes('--write'),reason,generatedAt:r.generatedAt,sourceUpdatedAt:r.sourceUpdatedAt,sourceUnchanged:previous.payload?.report?.sourceUpdatedAt===r.sourceUpdatedAt,period:r.period,summary:r.summary,onlineRs:r.onlineRs,topDeclines:selected.filter(x=>x.priority.types.includes('decline')).slice(0,5).map(x=>({name:x.name,rate:Math.round(x.sales.rate*10)/10,diff:x.sales.diff})),externalSources:'외부 글은 확인된 거래처만 제공하며, 캠핏 직접 수집과 구분합니다. 전체 거래처 검색 완료를 의미하지 않습니다.'},null,2));
 }
 main().catch(e=>{console.error('브리핑 갱신 실패: '+e.message);process.exitCode=1;});
