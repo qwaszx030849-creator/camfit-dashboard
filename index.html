@@ -152,10 +152,12 @@ th.sortable .arr-up,th.sortable .arr-down{display:block}
   <button data-tab="camps">거래처 목록</button>
   <button data-tab="clientMap">🗺️ 거래처 지도</button>
   <button data-tab="newsletter">📰 뉴스레터</button>
+  <button data-tab="monitoring">거래처 모니터링</button>
   <button data-tab="incentive">💰 수당 시뮬레이터</button>
 </div>
 <div class="content" id="app"></div>
 
+<script src="monitoring.js"></script>
 <script src="briefing-core.js"></script>
 <script src="briefing-ui.js"></script>
 <script>
@@ -906,6 +908,7 @@ function initClientMap(){
 // === RENDER FUNCTIONS ===
 
 tabs.briefing=briefingTab;
+if(typeof monitoringTab==='function')tabs.monitoring=monitoringTab;
 function renderTab(name){
   destroyCharts();
   document.getElementById('app').innerHTML=tabs[name]();
@@ -920,6 +923,7 @@ function renderTab(name){
   if(name==='clientMap')initClientMap();
   if(name==='newsletter')loadNewsletters();
   if(name==='briefing')renderBriefingUI();
+  if(name==='monitoring')initMonitoring();
   if(name==='incentive'){incentiveSimType='type1';simCalc()}
 }
 
@@ -2558,3 +2562,5 @@ secureAuthReady.then(()=>secureAuth.onAuthStateChanged(async user=>{
 </script>
 </body>
 </html>
+
+
