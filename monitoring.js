@@ -8,11 +8,13 @@
   const load=()=>{try{return JSON.parse(localStorage.getItem(key())||'{"clients":[],"items":[],"logs":[]}')}catch(e){return{clients:[],items:[],logs:[]}}};
   const save=s=>localStorage.setItem(key(),JSON.stringify(s));
   const month=d=>String(d||'').slice(0,7);
+  function allCamps(){try{if(typeof window.activeCamps==='function')return window.activeCamps()}catch(e){}return[]}
+  function allMonthly(){try{if(typeof window.activeMonthly==='function')return window.activeMonthly()}catch(e){}return[]}
   function campNames(){
     try{
       const names=[];
-      (window.D?.camps||[]).forEach(c=>{if(c?.n)names.push(c.n)});
-      (window.D?.monthly||[]).forEach(r=>{if(r?.n)names.push(r.n)});
+      allCamps().forEach(c=>{if(c?.n)names.push(c.n)});
+      allMonthly().forEach(r=>{if(r?.n)names.push(r.n)});
       try{(typeof window.cmLoad==='function'?window.cmLoad():[]).forEach(c=>{if(c?.name)names.push(c.name)})}catch(e){}
       try{load().clients.forEach(c=>{if(c?.name)names.push(c.name)})}catch(e){}
       return [...new Set(names.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
@@ -31,8 +33,8 @@
   }
   function clientData(name){
     try{
-      const camp=(window.campMap||{})[name]||{};
-      const latest=(window.D?.monthly||[]).filter(r=>r.n===name).sort((a,b)=>(b.y*100+b.m)-(a.y*100+a.m))[0]||{};
+      const camp=allCamps().find(c=>c.n===name)||{};
+      const latest=allMonthly().filter(r=>r.n===name).sort((a,b)=>(b.y*100+b.m)-(a.y*100+a.m))[0]||{};
       return {region:(camp.a||'').split(' ').slice(0,2).join(' '),plan:camp.p||camp.mp||'-',pay:latest.pay||0,link:camp.l||''};
     }catch(e){return{region:'',plan:'-',pay:0,link:''}}
   }
@@ -116,6 +118,7 @@
   function itemCard(i,history){const tag=i.sentiment==='주의'?'tag-red':i.sentiment==='긍정'?'tag-green':'tag-blue';const text=esc(kakaoMessage(i)).replace(/\n/g,'<br>');return `<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;background:${history?'var(--bg)':'rgba(245,158,11,.06)'}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>${esc(i.client)}</strong> <span class="tag ${tag}">${esc(i.sentiment)}</span> <span style="color:var(--text2);font-size:11px">${esc(i.date)} · ${esc(i.source)}</span><div style="margin-top:7px"><a class="camp-link" target="_blank" rel="noopener" href="${esc(i.url||'#')}">${esc(i.title)}</a></div><p style="color:var(--text2);font-size:12px;line-height:1.55;margin-top:6px;white-space:normal">${esc(i.summary||'메모 없음')}</p></div><button class="btn-del" onclick="monDeleteItem('${i.id}')">삭제</button></div><details style="margin-top:10px"><summary style="cursor:pointer;color:var(--accent);font-size:12px;font-weight:700">카카오 발송 문안 보기</summary><div class="msg-template" style="white-space:normal;margin-top:8px">${text}</div></details>${history?`<div style="margin-top:10px;color:var(--text2);font-size:12px">상태: ${i.status==='sent'?'발송완료 '+esc(i.sentAt||''):'보류 '+esc(i.skippedAt||'')}</div>`:`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" onclick="monCopyMessage('${i.id}')">문안 복사</button><button class="btn btn-green" onclick="monMark('${i.id}','sent')">발송완료</button><button class="btn" style="background:var(--card2);color:var(--text)" onclick="monMark('${i.id}','skipped')">보류</button></div>`}</div>`}
   function renderItems(){const s=load();const pending=document.getElementById('monPendingList');const history=document.getElementById('monHistoryList');if(!pending||!history)return;const p=s.items.filter(i=>i.status==='pending');const h=s.items.filter(i=>i.status!=='pending').slice(0,20);pending.innerHTML=p.map(i=>itemCard(i,false)).join('')||'<div style="color:var(--text2);text-align:center;padding:26px">승인 대기 항목이 없습니다. 오늘 검색을 열어 새 글을 등록하세요.</div>';history.innerHTML=h.map(i=>itemCard(i,true)).join('')||'<div style="color:var(--text2);text-align:center;padding:22px">아직 발송/보류 이력이 없습니다.</div>'}
 })();
+
 
 
 
