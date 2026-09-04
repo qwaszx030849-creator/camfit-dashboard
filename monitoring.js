@@ -79,7 +79,7 @@
         <div id="monClientList"></div>
       </div>
       <div class="panel"><h3><span class="icon" style="background:var(--green)"></span>발견 글 등록</h3>
-        <div class="filter-row"><select id="monItemClient" style="min-width:180px">${s.clients.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('')}</select><select id="monItemSource"><option>네이버 블로그</option><option>네이버 뉴스</option><option>인스타그램</option><option>카페/커뮤니티</option><option>기타</option></select></div>
+        <div class="filter-row"><select id="monItemClient" style="min-width:180px">${s.clients.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('')}</select><select id="monItemSource"><option>네이버 블로그</option><option>네이버 뉴스</option><option>Google 뉴스</option><option>인스타그램</option><option>카페/커뮤니티</option><option>기타</option></select></div>
         <input class="search" id="monItemTitle" placeholder="글 제목" style="width:100%;margin-bottom:8px">
         <input class="search" id="monItemUrl" placeholder="URL" style="width:100%;margin-bottom:8px">
         <textarea id="monItemSummary" placeholder="핵심 내용 메모" style="width:100%;min-height:88px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-family:inherit"></textarea>
@@ -108,6 +108,54 @@
   window.monAddClient=function(){const el=document.getElementById('monClientName');const name=(el?.value||'').trim();if(!name)return alert('캠핑장명을 입력해주세요.');const s=load();if(s.clients.some(c=>c.name===name))return alert('이미 등록된 거래처입니다.');s.clients.push({name,keywords:[name],active:true,createdAt:today()});save(s);renderTab('monitoring')};
   window.monRemoveClient=function(name){if(!confirm(name+' 모니터링을 해제할까요?'))return;const s=load();s.clients=s.clients.filter(c=>c.name!==name);save(s);renderTab('monitoring')};
   window.monOpenSearch=function(name,type){const c=load().clients.find(x=>x.name===name);if(!c)return;window.open(searchUrls(c)[type]||searchUrls(c).blog,'_blank','noopener')};
+  window.monLoadCollected=async function(){
+    const btn=document.getElementById('monCollectBtn');
+    const old=btn?btn.textContent:'';
+    if(btn){btn.disabled=true;btn.textContent='불러오는 중...'}
+    try{
+      const res=await fetch('data/monitoring/latest.json?ts='+Date.now(),{cache:'no-store'});
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      const data=await res.json();
+      const s=load();
+      const active=new Set(s.clients.filter(c=>c.active!==false).map(c=>c.name));
+      const existing=new Set(s.items.map(i=>i.url||i.id));
+      const incoming=(Array.isArray(data.items)?data.items:[]).filter(i=>active.has(i.client));
+      let added=0;
+      incoming.forEach(i=>{
+        const key=i.url||i.id;
+        if(!key||existing.has(key))return;
+        existing.add(key);
+        s.items.unshift({
+          id:'auto_'+Date.now()+'_'+added,
+          client:i.client,
+          title:i.title||'제목 없음',
+          url:i.url||'',
+          summary:i.summary||'',
+          source:i.source||'자동 수집',
+          date:i.date||today(),
+          publishedAt:i.publishedAt||'',
+          sentiment:i.sentiment||classify(i.title||'',i.summary||''),
+          status:'pending'
+        });
+        added++;
+      });
+      save(s);
+      renderTab('monitoring');
+      const generated=data.generatedAt?new Date(data.generatedAt).toLocaleString('ko-KR'):'수집 시각 없음';
+      const failures=Array.isArray(data.failures)?data.failures.length:0;
+      alert('자동 수집 결과\n감시 거래처: '+(data.watchlistCount||active.size)+'개\n수집 후보: '+(data.count||0)+'건\n새로 추가: '+added+'건\n실패 소스: '+failures+'건\n수집 시각: '+generated);
+    }catch(e){
+      alert('자동 수집 결과를 불러오지 못했습니다. 배포된 data/monitoring/latest.json 파일을 확인해주세요.\n'+(e.message||e));
+    }finally{
+      const next=document.getElementById('monCollectBtn');
+      if(next){next.disabled=false;next.textContent=old||'자동 수집 결과 불러오기'}
+    }
+  };
+  window.monCopyWatchlist=function(){
+    const s=load();
+    const payload={clients:s.clients.filter(c=>c.active!==false).map(c=>({name:c.name,keywords:c.keywords&&c.keywords.length?c.keywords:[c.name],active:true,createdAt:c.createdAt||today()}))};
+    navigator.clipboard.writeText(JSON.stringify(payload,null,2)).then(()=>alert('현재 모니터링 거래처 '+payload.clients.length+'개 감시목록을 복사했습니다.'));
+  };
   window.monOpenBatchSearch=function(){load().clients.filter(c=>c.active!==false).slice(0,5).forEach((c,i)=>setTimeout(()=>window.open(searchUrls(c).blog,'_blank','noopener'),i*250))};
   window.monAddItem=function(){const client=document.getElementById('monItemClient')?.value;const title=(document.getElementById('monItemTitle')?.value||'').trim();const url=(document.getElementById('monItemUrl')?.value||'').trim();const summary=(document.getElementById('monItemSummary')?.value||'').trim();const source=document.getElementById('monItemSource')?.value||'웹';if(!client||!title)return alert('거래처와 제목은 필수입니다.');const s=load();if(url&&s.items.some(i=>i.url===url))return alert('이미 등록된 URL입니다.');s.items.unshift({id:'mon_'+Date.now(),client,title,url,summary,source,date:today(),sentiment:classify(title,summary),status:'pending'});save(s);renderTab('monitoring')};
   window.monCopyMessage=function(id){const i=load().items.find(x=>x.id===id);if(!i)return;navigator.clipboard.writeText(kakaoMessage(i)).then(()=>alert('카카오톡에 붙여넣을 문안을 복사했습니다.'))};
@@ -118,6 +166,7 @@
   function itemCard(i,history){const tag=i.sentiment==='주의'?'tag-red':i.sentiment==='긍정'?'tag-green':'tag-blue';const text=esc(kakaoMessage(i)).replace(/\n/g,'<br>');return `<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;background:${history?'var(--bg)':'rgba(245,158,11,.06)'}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>${esc(i.client)}</strong> <span class="tag ${tag}">${esc(i.sentiment)}</span> <span style="color:var(--text2);font-size:11px">${esc(i.date)} · ${esc(i.source)}</span><div style="margin-top:7px"><a class="camp-link" target="_blank" rel="noopener" href="${esc(i.url||'#')}">${esc(i.title)}</a></div><p style="color:var(--text2);font-size:12px;line-height:1.55;margin-top:6px;white-space:normal">${esc(i.summary||'메모 없음')}</p></div><button class="btn-del" onclick="monDeleteItem('${i.id}')">삭제</button></div><details style="margin-top:10px"><summary style="cursor:pointer;color:var(--accent);font-size:12px;font-weight:700">카카오 발송 문안 보기</summary><div class="msg-template" style="white-space:normal;margin-top:8px">${text}</div></details>${history?`<div style="margin-top:10px;color:var(--text2);font-size:12px">상태: ${i.status==='sent'?'발송완료 '+esc(i.sentAt||''):'보류 '+esc(i.skippedAt||'')}</div>`:`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" onclick="monCopyMessage('${i.id}')">문안 복사</button><button class="btn btn-green" onclick="monMark('${i.id}','sent')">발송완료</button><button class="btn" style="background:var(--card2);color:var(--text)" onclick="monMark('${i.id}','skipped')">보류</button></div>`}</div>`}
   function renderItems(){const s=load();const pending=document.getElementById('monPendingList');const history=document.getElementById('monHistoryList');if(!pending||!history)return;const p=s.items.filter(i=>i.status==='pending');const h=s.items.filter(i=>i.status!=='pending').slice(0,20);pending.innerHTML=p.map(i=>itemCard(i,false)).join('')||'<div style="color:var(--text2);text-align:center;padding:26px">승인 대기 항목이 없습니다. 오늘 검색을 열어 새 글을 등록하세요.</div>';history.innerHTML=h.map(i=>itemCard(i,true)).join('')||'<div style="color:var(--text2);text-align:center;padding:22px">아직 발송/보류 이력이 없습니다.</div>'}
 })();
+
 
 
 

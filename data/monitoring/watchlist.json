@@ -1,3 +1,180 @@
 {
-  "clients": []
+  "clients": [
+    {
+      "name": "가델캠핑장",
+      "keywords": [
+        "가델캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "양주 감악산 캠핑장",
+      "keywords": [
+        "양주 감악산 캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "용가리쌤캠핑장",
+      "keywords": [
+        "용가리쌤캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "산머루농원캠핑장",
+      "keywords": [
+        "산머루농원캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "대룡산 오토캠핑장",
+      "keywords": [
+        "대룡산 오토캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "영월 당마루 캠핑장",
+      "keywords": [
+        "영월 당마루 캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "힐링5353캠핑장",
+      "keywords": [
+        "힐링5353캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "청주 오로라캠핑장",
+      "keywords": [
+        "청주 오로라캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "진천명품 휴미락캠핑장",
+      "keywords": [
+        "진천명품 휴미락캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "태안 바다드림 캠핑장",
+      "keywords": [
+        "태안 바다드림 캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "라온 캠핑장& 야외수영장",
+      "keywords": [
+        "라온 캠핑장& 야외수영장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "포천 라온 글램핑&오토캠핑장",
+      "keywords": [
+        "포천 라온 글램핑&오토캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "안성 레이크202",
+      "keywords": [
+        "안성 레이크202"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "행운캠핑장",
+      "keywords": [
+        "행운캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "자연이랑캠프&펜션",
+      "keywords": [
+        "자연이랑캠프&펜션"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "양남 라라캠핑장",
+      "keywords": [
+        "양남 라라캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "한계산솔밭야영장",
+      "keywords": [
+        "한계산솔밭야영장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "소구니 캠핑장",
+      "keywords": [
+        "소구니 캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "파도와노을캠핑",
+      "keywords": [
+        "파도와노을캠핑"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "낭성캠핑장",
+      "keywords": [
+        "낭성캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "팜스프링 캠핑장",
+      "keywords": [
+        "팜스프링 캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    },
+    {
+      "name": "가평물골숲계곡오토캠핑장",
+      "keywords": [
+        "가평물골숲계곡오토캠핑장"
+      ],
+      "active": true,
+      "createdAt": "2026-09-03"
+    }
+  ]
 }
