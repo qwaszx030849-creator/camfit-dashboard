@@ -86,7 +86,7 @@
         <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" onclick="monAddItem()">등록</button></div>
       </div>
     </div>
-    <div class="panel"><h3><span class="icon" style="background:var(--orange)"></span>승인 대기 큐</h3><div id="monPendingList"></div></div>
+    <div class="panel"><h3><span class="icon" style="background:var(--orange)"></span>승인 대기 큐</h3><div id="monStatusBox" style="color:var(--text2);font-size:12px;margin-bottom:12px"></div><div id="monPendingList"></div></div>
     <div class="panel"><h3><span class="icon" style="background:var(--accent2)"></span>발송/보류 이력</h3><div id="monHistoryList"></div></div>`;
   };
   window.initMonitoring=function(){renderClients();renderItems()};
@@ -139,10 +139,11 @@
         });
         added++;
       });
-      save(s);
-      renderTab('monitoring');
       const generated=data.generatedAt?new Date(data.generatedAt).toLocaleString('ko-KR'):'수집 시각 없음';
       const failures=Array.isArray(data.failures)?data.failures.length:0;
+      s.meta={lastCollectedAt:generated,watchlistCount:data.watchlistCount||active.size,collectedCount:data.count||0,addedCount:added,failures};
+      save(s);
+      renderTab('monitoring');
       alert('자동 수집 결과\n감시 거래처: '+(data.watchlistCount||active.size)+'개\n수집 후보: '+(data.count||0)+'건\n새로 추가: '+added+'건\n실패 소스: '+failures+'건\n수집 시각: '+generated);
     }catch(e){
       alert('자동 수집 결과를 불러오지 못했습니다. 배포된 data/monitoring/latest.json 파일을 확인해주세요.\n'+(e.message||e));
@@ -164,7 +165,30 @@
   window.monExport=function(){const blob=new Blob([JSON.stringify(load(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='client-monitoring-'+today()+'.json';a.click();URL.revokeObjectURL(a.href)};
   function renderClients(){const el=document.getElementById('monClientList');if(!el)return;const s=load();el.innerHTML=s.clients.map(c=>{const d=clientData(c.name);return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;background:var(--bg)"><div style="display:flex;justify-content:space-between;gap:10px"><div><strong>${esc(c.name)}</strong><div style="color:var(--text2);font-size:11px;margin-top:3px">${esc(d.region)} · ${esc(d.plan)} · 최근 ${fmtMoney(d.pay)}</div></div><button class="btn-del" onclick="monRemoveClient('${esc(c.name)}')">해제</button></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><button class="btn" style="background:var(--card2);color:var(--text);font-size:11px" onclick="monOpenSearch('${esc(c.name)}','blog')">블로그</button><button class="btn" style="background:var(--card2);color:var(--text);font-size:11px" onclick="monOpenSearch('${esc(c.name)}','news')">뉴스</button><button class="btn" style="background:var(--card2);color:var(--text);font-size:11px" onclick="monOpenSearch('${esc(c.name)}','google')">구글</button></div></div>`}).join('')||'<div style="color:var(--text2);text-align:center;padding:24px">등록된 거래처가 없습니다.</div>'}
   function itemCard(i,history){const tag=i.sentiment==='주의'?'tag-red':i.sentiment==='긍정'?'tag-green':'tag-blue';const text=esc(kakaoMessage(i)).replace(/\n/g,'<br>');return `<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;background:${history?'var(--bg)':'rgba(245,158,11,.06)'}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>${esc(i.client)}</strong> <span class="tag ${tag}">${esc(i.sentiment)}</span> <span style="color:var(--text2);font-size:11px">${esc(i.date)} · ${esc(i.source)}</span><div style="margin-top:7px"><a class="camp-link" target="_blank" rel="noopener" href="${esc(i.url||'#')}">${esc(i.title)}</a></div><p style="color:var(--text2);font-size:12px;line-height:1.55;margin-top:6px;white-space:normal">${esc(i.summary||'메모 없음')}</p></div><button class="btn-del" onclick="monDeleteItem('${i.id}')">삭제</button></div><details style="margin-top:10px"><summary style="cursor:pointer;color:var(--accent);font-size:12px;font-weight:700">카카오 발송 문안 보기</summary><div class="msg-template" style="white-space:normal;margin-top:8px">${text}</div></details>${history?`<div style="margin-top:10px;color:var(--text2);font-size:12px">상태: ${i.status==='sent'?'발송완료 '+esc(i.sentAt||''):'보류 '+esc(i.skippedAt||'')}</div>`:`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"><button class="btn btn-primary" onclick="monCopyMessage('${i.id}')">문안 복사</button><button class="btn btn-green" onclick="monMark('${i.id}','sent')">발송완료</button><button class="btn" style="background:var(--card2);color:var(--text)" onclick="monMark('${i.id}','skipped')">보류</button></div>`}</div>`}
-  function renderItems(){const s=load();const pending=document.getElementById('monPendingList');const history=document.getElementById('monHistoryList');if(!pending||!history)return;const p=s.items.filter(i=>i.status==='pending');const h=s.items.filter(i=>i.status!=='pending').slice(0,20);pending.innerHTML=p.map(i=>itemCard(i,false)).join('')||'<div style="color:var(--text2);text-align:center;padding:26px">승인 대기 항목이 없습니다. 오늘 검색을 열어 새 글을 등록하세요.</div>';history.innerHTML=h.map(i=>itemCard(i,true)).join('')||'<div style="color:var(--text2);text-align:center;padding:22px">아직 발송/보류 이력이 없습니다.</div>'}
+  function clientGroups(items){
+    const map=new Map();
+    items.forEach(i=>{if(!map.has(i.client))map.set(i.client,[]);map.get(i.client).push(i)});
+    return [...map.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ko'));
+  }
+  function groupedItems(items,history){
+    if(!items.length)return '';
+    return clientGroups(items).map(([client,list])=>`<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden;background:var(--bg)"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 14px;background:rgba(255,255,255,.03)"><strong>${esc(client)}</strong><span class="tag tag-blue">${list.length}건</span></div><div style="padding:12px">${list.map(i=>itemCard(i,history)).join('')}</div></div>`).join('');
+  }
+  function renderItems(){
+    const s=load();
+    const pending=document.getElementById('monPendingList');
+    const history=document.getElementById('monHistoryList');
+    const status=document.getElementById('monStatusBox');
+    if(!pending||!history)return;
+    const p=s.items.filter(i=>i.status==='pending');
+    const h=s.items.filter(i=>i.status!=='pending').slice(0,60);
+    if(status){
+      const m=s.meta||{};
+      status.innerHTML=m.lastCollectedAt?`최근 자동 수집: ${esc(m.lastCollectedAt)} · 감시 ${esc(m.watchlistCount||0)}개 · 후보 ${esc(m.collectedCount||0)}건 · 새 추가 ${esc(m.addedCount||0)}건 · 실패 ${esc(m.failures||0)}건`:'자동 수집 결과를 아직 불러오지 않았습니다.';
+    }
+    pending.innerHTML=groupedItems(p,false)||'<div style="color:var(--text2);text-align:center;padding:26px">승인 대기 항목이 없습니다. 자동 수집 결과를 불러오거나 직접 글을 등록하세요.</div>';
+    history.innerHTML=groupedItems(h,true)||'<div style="color:var(--text2);text-align:center;padding:22px">아직 발송/보류 이력이 없습니다.</div>';
+  }
 })();
 
 
