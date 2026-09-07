@@ -57,6 +57,17 @@ test('external posts retain real checked dates, verification and history without
   assert.equal(again.report.rows.find(r=>r.name==='A').mentions[0].checkedAt,item.checkedAt.replace('Z','.000Z'));
   assert.equal(again.report.summary.recentMentions,0);
 });
+test('article monitor groups quiet clients independently of issue priority and supports filters',()=>{
+  const quiet=issueRow('조용한 업체'),important=issueRow('중요 업체',{diff:-2000000,rate:-50});
+  quiet.url='https://camfit.co.kr/camp/quiet';quiet.mentions=[{title:'가을 후기',summary:'깨끗한 시설',kind:'방문 후기',publishedAt:'2026-09-02',checkedAt:SOURCE,recent:true,verification:'read'}];
+  important.mentions=[{title:'지난 소개',summary:'소개글',kind:'소개·추천글',publishedAt:'2026-08-01',checkedAt:SOURCE,recent:false,verification:'indexed'}];
+  const report=issueReport([important,quiet]);
+  assert.deepEqual(core.articleGroups(report).map(g=>g.name),['조용한 업체','중요 업체']);
+  assert.equal(core.articleGroups(report,{filter:'recent'}).length,1);
+  assert.equal(core.articleGroups(report,{filter:'read'})[0].name,'조용한 업체');
+  assert.equal(core.articleGroups(report,{filter:'indexed'})[0].name,'중요 업체');
+  assert.equal(core.articleGroups(report,{query:'깨끗한'}).length,1);
+});
 test('completed calendar month, net sales, missing row never false -100%',()=>{
   const r=build().report;assert.equal(r.period.current,'2026-08');assert.equal(r.period.previous,'2026-07');
   const a=r.rows.find(r=>r.name==='A');assert.equal(a.sales.current,50);assert.equal(a.sales.previous,90);assert.equal(a.sales.state,'decline');

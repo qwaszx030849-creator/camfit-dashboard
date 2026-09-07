@@ -4,9 +4,12 @@ const briefEsc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':
 const briefTime=value=>value?new Date(value).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}):'아직 없음';
 const briefMoney=value=>value===null?'내역 없음':Math.round(value).toLocaleString('ko-KR')+'원';
 function briefingTab(){
-  return '<div class="brief-head"><div><h2>거래처 브리핑</h2><p>최근 리뷰 · 사진 변경 · 진행 이벤트 · 매출 증감</p></div><button class="btn btn-primary" id="briefRefresh" onclick="refreshBriefingNow()">저장 데이터로 새로고침</button></div>'+
+  return '<div class="brief-head"><div><h2>거래처 브리핑</h2><p>최근 리뷰 · 사진 변경 · 진행 이벤트 · 매출 증감 · 외부 글</p></div><button class="btn btn-primary" id="briefRefresh" onclick="refreshBriefingNow()">저장 데이터로 새로고침</button></div>'+
     '<div class="brief-status" id="briefStatus" role="status" aria-live="polite">브리핑을 불러오는 중입니다.</div><p class="brief-meta">오전 9시 자동 갱신·알림은 현재 PC의 Codex 예약 실행입니다. PC와 앱이 실행 중이어야 하며, 실패 시 마지막 정상 결과가 유지됩니다.</p>'+
     '<div id="briefSummary" class="kpi-row"></div><div id="briefWeekly" class="panel"></div>'+
+    '<section class="brief-monitor"><div class="brief-section-head"><div><h3>글 모니터링</h3><p class="brief-meta">찾은 후기·블로그·소개 글을 주요 이슈 여부와 관계없이 업체별로 모아 봅니다.</p></div><strong id="briefArticleCount">0개 업체</strong></div>'+
+    '<div id="briefMonitorStatus" class="brief-notice"></div><div class="filter-row"><input class="search" id="briefArticleSearch" aria-label="글 모니터링 검색" placeholder="업체명·글 제목 검색" oninput="renderArticleMonitor()"><select id="briefArticleFilter" aria-label="글 모니터링 상태" onchange="renderArticleMonitor()"><option value="all">찾은 글 전체</option><option value="recent">최근 30일</option><option value="read">원문 확인</option><option value="indexed">검색에서 발견</option></select></div><div id="briefArticleGroups" class="brief-article-groups"></div></section>'+
+    '<div class="brief-section-head brief-issue-head"><div><h3>주요 브리핑</h3><p class="brief-meta">중요도가 높은 업체부터 표시합니다.</p></div></div>'+
     '<div class="brief-notice">브리핑할 이슈가 있는 거래처만 중요도 → 매출 영향액 순으로 표시합니다. 매출은 20% 이상·10만 원 이상 변동, 외부 글은 최근 7일 원문 확인 건이 기준입니다. 과거 글·원문 미확인·자료 부족·미연동만 있는 거래처는 제외합니다. 캠핏 직접 수집은 미연동이며 “변경 없음”을 뜻하지 않습니다.</div>'+
     '<div class="filter-row"><input class="search" id="briefSearch" aria-label="브리핑 거래처 검색" placeholder="거래처 이름 검색" oninput="renderBriefingCards()"><select id="briefFilter" aria-label="브리핑 유형" onchange="renderBriefingCards()"><option value="all">전체 거래처</option><option value="decline">매출 20% 이상 감소</option><option value="growth">매출 20% 이상 증가</option><option value="reviews">리뷰 증가 / 최근 리뷰</option><option value="photos">사진 변경</option><option value="events">진행 이벤트</option></select><span id="briefCount"></span></div>'+
     '<p id="briefPeriod" class="brief-meta"></p><div id="briefCards" class="brief-grid"></div>';
@@ -98,6 +101,7 @@ function renderBriefingUI(){
   document.getElementById('briefPeriod').textContent=r?'매출 비교: '+r.period.previous+' → '+r.period.current+' · '+r.period.note:'';
   const rs=r?.onlineRs;
   document.getElementById('briefWeekly').innerHTML=rs?'<h3>최신 주간 온라인 RS 정산</h3><p class="brief-meta">'+briefEsc(rs.previousPeriod)+' → '+briefEsc(rs.currentPeriod)+'</p><p>'+briefMoney(rs.previous)+' → <strong>'+briefMoney(rs.current)+'</strong> · '+(rs.rate===null?'이전 비교 기준 부족':(rs.rate>=0?'+':'')+rs.rate.toFixed(1)+'%')+'</p>':'주간 온라인 RS 정산 내역이 없습니다.';
+  renderArticleMonitor();
   renderBriefingCards();
 }
 function briefReviewHTML(review){
@@ -117,6 +121,19 @@ function briefEventHTML(events){
 function briefMentionsHTML(items){
   if(!items?.length)return '<section><h4>외부 후기·블로그</h4><p class="brief-meta">아직 확인된 외부 글이 없습니다. 검색 완료 또는 후기 없음의 의미는 아닙니다.</p></section>';
   return '<section><h4>외부 후기·블로그</h4>'+items.map(m=>'<div class="brief-review"><a href="'+briefEsc(BriefingCore.safeUrl(m.url))+'" target="_blank" rel="noopener noreferrer">'+briefEsc(m.title)+' ↗</a><p class="brief-meta">'+briefEsc(m.kind)+' · 작성 '+briefEsc(m.publishedAt)+' · '+(m.recent?'최근 30일 글':'과거 참고 글')+' · 확인 '+briefTime(m.checkedAt)+'</p><p>'+briefEsc(m.summary)+'</p>'+(m.verification==='read'?'<span class="tag">원문 확인</span>':'<span class="tag tag-orange">검색·목록에서 발견 / 원문 미확인</span>')+(m.evidenceUrl?'<a href="'+briefEsc(BriefingCore.safeUrl(m.evidenceUrl))+'" target="_blank" rel="noopener noreferrer"> 확인 출처 ↗</a>':'')+'</div>').join('')+'</section>';
+}
+function renderArticleMonitor(){
+  const target=document.getElementById('briefArticleGroups');if(!target)return;
+  const q=document.getElementById('briefArticleSearch')?.value||'',filter=document.getElementById('briefArticleFilter')?.value||'all';
+  const report=briefingState?.report,groups=BriefingCore.articleGroups(report,{query:q,filter}).filter(g=>!isHidden(g.name));
+  const all=BriefingCore.articleGroups(report).filter(g=>!isHidden(g.name)),items=groups.reduce((sum,g)=>sum+g.mentions.length,0);
+  const checked=all.flatMap(g=>g.mentions.map(m=>m.checkedAt)).filter(Boolean).sort().at(-1);
+  document.getElementById('briefArticleCount').textContent=groups.length+'개 업체 · '+items+'건';
+  document.getElementById('briefMonitorStatus').innerHTML='<strong>현재 글 확보 '+all.length+'/'+((report?.rows||[]).filter(r=>!isHidden(r.name)).length)+'개 업체</strong><p>매일 최대 20개 업체(우선 5 + 순환 15)를 검색합니다. 전체 업체 검색 완료나 글이 없다는 뜻은 아닙니다.'+(checked?' · 마지막 출처 확인 '+briefTime(checked):'')+'</p>';
+  target.innerHTML=groups.map(group=>{
+    const href=BriefingCore.safeUrl(group.url);
+    return '<article class="brief-card brief-article-group"><div class="brief-card-head"><div><h3>'+briefEsc(group.name)+'</h3><span class="brief-meta">글 '+group.mentions.length+'건 · 최신 작성일 '+briefEsc(group.latest)+'</span></div>'+(href?'<a class="camp-link" href="'+briefEsc(href)+'" target="_blank" rel="noopener noreferrer">거래처 보기 ↗</a>':'')+'</div>'+briefMentionsHTML(group.mentions)+'</article>';
+  }).join('')||'<div class="panel">현재 조건에서 찾은 글이 없습니다. 검색 대상에 아직 포함되지 않은 업체는 순환 검색 때 확인됩니다.</div>';
 }
 function renderBriefingCards(){
   const target=document.getElementById('briefCards');if(!target)return;

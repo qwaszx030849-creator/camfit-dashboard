@@ -96,6 +96,18 @@
     return(report?.rows||[]).map(row=>({...row,priority:priorityFor(row,report,now)})).filter(r=>r.priority.eligible).sort((a,b)=>
       b.priority.level-a.priority.level||b.priority.impact-a.priority.impact||b.priority.reasons.length-a.priority.reasons.length||a.name.localeCompare(b.name,'ko'));
   }
+  function articleGroups(report,options={}){
+    const query=String(options.query||'').trim().toLowerCase(),filter=options.filter||'all';
+    return(report?.rows||[]).map(row=>{
+      const mentions=(row.mentions||[]).filter(m=>{
+        if(filter==='recent'&&!m.recent)return false;
+        if(filter==='read'&&m.verification!=='read')return false;
+        if(filter==='indexed'&&m.verification!=='indexed')return false;
+        return !query||[row.name,m.title,m.summary,m.kind].some(v=>String(v||'').toLowerCase().includes(query));
+      }).sort((a,b)=>String(b.publishedAt||'').localeCompare(String(a.publishedAt||''))||String(b.checkedAt||'').localeCompare(String(a.checkedAt||'')));
+      return{key:row.key,name:row.name,url:row.url,mentions,latest:mentions[0]?.publishedAt||''};
+    }).filter(group=>group.mentions.length).sort((a,b)=>b.latest.localeCompare(a.latest)||a.name.localeCompare(b.name,'ko'));
+  }
   function onlineRsSummary(payload,now){
     const today=koreanDate(now),rows=(payload.onlineRS||[]).map(r=>({date:settledDate(r[1]),rs:num(r[4])})).filter(r=>r.date&&r.date<=today);
     if(!rows.length)return null;
@@ -169,5 +181,5 @@
     if(next<=time.getTime())next+=DAY;
     return new Date(next).toISOString();
   }
-  return{build,salesData,revenue,safeUrl,campKey,monthKey,previousMonth,nextThursday,nextDaily,koreanDate,settledDate,onlineRsSummary,priorityFor,selectBriefingRows};
+  return{build,salesData,revenue,safeUrl,campKey,monthKey,previousMonth,nextThursday,nextDaily,koreanDate,settledDate,onlineRsSummary,priorityFor,selectBriefingRows,articleGroups};
 });

@@ -24,8 +24,9 @@ async function main(){
   if(process.argv.includes('--candidates')){
     const camps=source.payload.raw.camps.filter(x=>safeUrl(x.l)).sort((a,b)=>a.n.localeCompare(b.n,'ko'));
     const priority=selectBriefingRows(next.report).slice(0,5).map(r=>camps.find(c=>campKey(c)===r.key)).filter(Boolean);
-    const offset=(Math.floor(Date.now()/86400000)*5)%Math.max(camps.length,1);
-    const rotation=Array.from({length:Math.min(5,camps.length)},(_,i)=>camps[(offset+i)%camps.length]);
+    const rotationSize=15;
+    const offset=(Math.floor(Date.now()/86400000)*rotationSize)%Math.max(camps.length,1);
+    const rotation=Array.from({length:Math.min(rotationSize,camps.length)},(_,i)=>camps[(offset+i)%camps.length]);
     console.log(JSON.stringify([...new Map([...priority,...rotation].map(c=>[campKey(c),{name:c.n,address:c.a,camfitUrl:c.l,existing:externalSources[campKey(c)]||[]}])).values()],null,2));return;
   }
   if(process.argv.includes('--write'))await c.saveBriefing(next,source.updateTime,reason,previous.meta?.version);
