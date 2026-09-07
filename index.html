@@ -2256,8 +2256,9 @@ async function loadNewsletters(forceRefresh){
 function openNewsletterDetail(idx){
   const nl=window._nlCache[idx];
   if(!nl)return;
-  nl._reviewItems=[...(nl.items||[])];
+  nl._reviewItems=(nl.items||[]).map((item,i)=>({...item,_reviewOriginalSlot:i+1}));
   nl._reviewExcluded=[];
+  nl._reviewDeleted=[];
   nl._reviewCandidateCursor=0;
   nl._reviewChanges=[];
   const overlay=document.createElement('div');
@@ -2273,7 +2274,7 @@ function openNewsletterDetail(idx){
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <button onclick="copyNewsletterForKakao(${idx})" id="nlKakaoBtn" class="btn" style="background:var(--orange);color:#fff;font-size:12px;padding:6px 14px">📱 카톡 복사</button>
-          <button onclick="copyNewsletterReviewCommand(${idx})" id="nlReviewCmdBtn" class="btn" style="background:var(--accent);color:#fff;font-size:12px;padding:6px 14px">X 교체 명령</button>
+          <button onclick="copyNewsletterReviewCommand(${idx})" id="nlReviewCmdBtn" class="btn" style="background:var(--accent);color:#fff;font-size:12px;padding:6px 14px">검토 명령</button>
           <button onclick="document.getElementById('nlDetailOverlay').remove()" style="background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer;padding:4px 8px">✕</button>
         </div>
       </div>
@@ -2315,9 +2316,11 @@ function renderNewsletterReviewState(idx){
   const candidates=nl.review_candidates||[];
   const changes=nl._reviewChanges||[];
   if(tools){
-    const log=changes.length?changes.map(c=>`${c.slot}번 교체: ${nlEsc(c.removed?.title)} → ${nlEsc(c.replacement?.title)}`).join('<br>'):'아직 제외한 기사가 없습니다.';
+    const log=changes.length?changes.map(c=>c.type==='delete'
+      ? `${c.slot}번 삭제: ${nlEsc(c.removed?.title)}`
+      : `${c.slot}번 교체: ${nlEsc(c.removed?.title)} → ${nlEsc(c.replacement?.title)}`).join('<br>'):'아직 제외한 기사가 없습니다.';
     tools.innerHTML=`<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
-      <div><strong style="color:var(--text)">검토 모드</strong><div style="margin-top:4px">X를 누르면 대체 후보로 즉시 채웁니다. 후보 ${candidates.length}개</div></div>
+      <div><strong style="color:var(--text)">검토 모드</strong><div style="margin-top:4px">교체는 후보가 있을 때만 채우고, 삭제는 후보 없이도 바로 제외합니다. 현재 ${items.length}개 · 후보 ${candidates.length}개</div></div>
       <button class="btn" onclick="copyNewsletterReviewJson(${idx})" style="background:var(--card2);color:var(--text);font-size:12px;padding:6px 12px">검토본 JSON 복사</button>
     </div><div style="margin-top:8px;color:var(--text);font-size:12px">${log}</div>`;
   }
@@ -2331,7 +2334,7 @@ function renderNewsletterReviewState(idx){
           <span style="color:var(--accent);font-weight:700;font-size:16px">${i+1}</span>
           <span class="tag tag-blue">${nlEsc(item.category||item.source||'')}</span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">${date}<button onclick="replaceNewsletterItem(${idx},${i})" title="이 기사를 제외하고 후보 기사로 대체" style="width:28px;height:28px;border-radius:6px;border:1px solid rgba(239,68,68,.5);background:rgba(239,68,68,.12);color:#fecaca;font-weight:800;cursor:pointer">X</button></div>
+        <div style="display:flex;align-items:center;gap:6px">${date}<button onclick="replaceNewsletterItem(${idx},${i})" title="이 기사를 제외하고 후보 기사로 대체" style="width:32px;height:28px;border-radius:6px;border:1px solid rgba(59,130,246,.55);background:rgba(59,130,246,.14);color:#bfdbfe;font-weight:800;cursor:pointer;font-size:11px">교체</button><button onclick="deleteNewsletterItem(${idx},${i})" title="이 기사를 대체 없이 삭제" style="width:32px;height:28px;border-radius:6px;border:1px solid rgba(239,68,68,.5);background:rgba(239,68,68,.12);color:#fecaca;font-weight:800;cursor:pointer;font-size:11px">삭제</button></div>
       </div>
       <a href="${nlEsc(item.url)}" target="_blank" style="color:var(--text);text-decoration:none;font-size:15px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px">${nlEsc(item.title)}</a>
       ${desc}
@@ -2350,26 +2353,53 @@ function replaceNewsletterItem(idx,itemIndex){
     const c=candidates[cursor++];
     if(c?.url&&!used.has(c.url)){replacement=c;break;}
   }
-  if(!replacement){alert('대체 후보가 더 없습니다. 다음 발행 때 후보군을 더 많이 모으겠습니다.');return;}
+  if(!replacement){deleteNewsletterItem(idx,itemIndex);return;}
   const removed=items[itemIndex];
-  items[itemIndex]=replacement;
+  const slot=removed?._reviewOriginalSlot||itemIndex+1;
+  items[itemIndex]={...replacement,_reviewOriginalSlot:slot};
   nl._reviewItems=items;
   nl._reviewCandidateCursor=cursor;
-  nl._reviewExcluded=[...(nl._reviewExcluded||[]),itemIndex+1];
-  nl._reviewChanges=[...(nl._reviewChanges||[]),{slot:itemIndex+1,removed,replacement}];
+  nl._reviewExcluded=[...(nl._reviewExcluded||[]),slot];
+  nl._reviewChanges=[...(nl._reviewChanges||[]),{type:'replace',slot,removed,replacement}];
   renderNewsletterReviewState(idx);
+}
+function deleteNewsletterItem(idx,itemIndex){
+  const nl=window._nlCache[idx];
+  if(!nl)return;
+  const items=nl._reviewItems||[...(nl.items||[])];
+  const removed=items[itemIndex];
+  if(!removed)return;
+  const slot=removed._reviewOriginalSlot||itemIndex+1;
+  items.splice(itemIndex,1);
+  nl._reviewItems=items;
+  nl._reviewDeleted=[...(nl._reviewDeleted||[]),slot];
+  nl._reviewChanges=[...(nl._reviewChanges||[]),{type:'delete',slot,removed}];
+  renderNewsletterReviewState(idx);
+}
+function cleanedReviewItems(nl){
+  return (nl._reviewItems||nl.items||[]).map(({_reviewOriginalSlot,...item})=>item);
 }
 function copyNewsletterReviewCommand(idx){
   const nl=window._nlCache[idx];
   const excluded=nl?nl._reviewExcluded||[]:[];
-  if(!excluded.length){alert('먼저 X로 제외할 기사를 선택해주세요.');return;}
-  const cmd=`python review_replacements.py --file output/${newsletterFileName(nl)} --exclude ${excluded.join(' ')}`;
-  navigator.clipboard.writeText(cmd).then(()=>alert('교체 명령을 복사했습니다.'));
+  const deleted=nl?nl._reviewDeleted||[]:[];
+  if(!excluded.length&&!deleted.length){alert('먼저 교체 또는 삭제할 기사를 선택해주세요.');return;}
+  const parts=[`python review_replacements.py --file output/${newsletterFileName(nl)}`];
+  if(excluded.length)parts.push(`--exclude ${excluded.join(' ')}`);
+  if(deleted.length)parts.push(`--delete ${deleted.join(' ')}`);
+  navigator.clipboard.writeText(parts.join(' ')).then(()=>alert('검토 명령을 복사했습니다.'));
+}
+function cleanedReviewChange(change){
+  const base={type:change.type,slot:change.slot,removed:change.removed?{title:change.removed.title,url:change.removed.url}:null};
+  if(change.type==='replace')base.replacement=change.replacement?{title:change.replacement.title,url:change.replacement.url}:null;
+  return base;
 }
 function copyNewsletterReviewJson(idx){
   const nl=window._nlCache[idx];
   if(!nl)return;
-  const reviewed={...nl,items:nl._reviewItems||nl.items||[],items_count:(nl._reviewItems||nl.items||[]).length,review_status:(nl._reviewChanges||[]).length?'preview_replaced':(nl.review_status||'draft'),review_changes_preview:nl._reviewChanges||[]};
+  const items=cleanedReviewItems(nl);
+  const reviewed={...nl,items,items_count:items.length,review_status:(nl._reviewChanges||[]).length?'preview_edited':(nl.review_status||'draft'),review_changes_preview:(nl._reviewChanges||[]).map(cleanedReviewChange)};
+  delete reviewed._reviewItems; delete reviewed._reviewExcluded; delete reviewed._reviewDeleted; delete reviewed._reviewCandidateCursor; delete reviewed._reviewChanges;
   navigator.clipboard.writeText(JSON.stringify(reviewed,null,2)).then(()=>alert('검토본 JSON을 복사했습니다.'));
 }
 
@@ -2382,7 +2412,7 @@ function copyNewsletterForKakao(idx){
   lines.push('');
   lines.push('ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ');
   lines.push('');
-  (nl._reviewItems||nl.items||[]).forEach((item,i)=>{
+  cleanedReviewItems(nl).forEach((item,i)=>{
     lines.push(`📌 ${i+1}. ${item.title}`);
     lines.push('');
     const desc=item.summary||item.description;
