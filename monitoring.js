@@ -1,7 +1,7 @@
 (function(){
   const STORE='camfit_monitoring_v1_';
   const today=()=>new Date().toISOString().slice(0,10);
-  const uid=()=>window.secureUid||'local';
+  const uid=()=>typeof secureUid==='string'?secureUid:'local';
   const key=()=>STORE+uid();
   const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const fmtMoney=n=>typeof window.fmt==='function'?window.fmt(n):Number(n||0).toLocaleString('ko-KR');
@@ -65,7 +65,7 @@
     return `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:20px">
       <div><h2 style="font-size:22px">거래처 모니터링</h2><p style="color:var(--text2);font-size:13px;margin-top:6px">업체 관련 블로그·뉴스·후기를 발견하면 대표님께 보낼 개인톡 문안을 자동 정리합니다.</p></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" id="monCollectBtn" onclick="monLoadCollected()">자동 수집 결과 불러오기</button><button class="btn" style="background:var(--card2);color:var(--text)" onclick="monCopyWatchlist()">감시목록 복사</button><button class="btn" style="background:var(--card2);color:var(--text)" onclick="monOpenBatchSearch()">검색창 열기</button><button class="btn" style="background:var(--card2);color:var(--text)" onclick="monExport()">JSON 내보내기</button></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" id="monCollectBtn" onclick="monLoadCollected(false)">최신 검색 글 불러오기</button><button class="btn" style="background:var(--card2);color:var(--text)" onclick="monCopyWatchlist()">감시목록 복사</button><button class="btn" style="background:var(--card2);color:var(--text)" onclick="monOpenBatchSearch()">검색창 열기</button><button class="btn" style="background:var(--card2);color:var(--text)" onclick="monExport()">JSON 내보내기</button></div>
     </div>
     <div class="kpi-row">
       <div class="kpi"><div class="label">모니터링 거래처</div><div class="value">${s.clients.filter(c=>c.active!==false).length}개</div></div>
@@ -89,7 +89,7 @@
     <div class="panel"><h3><span class="icon" style="background:var(--orange)"></span>승인 대기 큐</h3><div id="monStatusBox" style="color:var(--text2);font-size:12px;margin-bottom:12px"></div><div id="monPendingList"></div></div>
     <div class="panel"><h3><span class="icon" style="background:var(--accent2)"></span>발송/보류 이력</h3><div id="monHistoryList"></div></div>`;
   };
-  window.initMonitoring=function(){renderClients();renderItems()};
+  window.initMonitoring=function(){renderClients();renderItems();monLoadCollected(true)};
   window.monClientAutoComplete=function(){
     const input=document.getElementById('monClientName');
     const ac=document.getElementById('monClientAC');
@@ -108,18 +108,22 @@
   window.monAddClient=function(){const el=document.getElementById('monClientName');const name=(el?.value||'').trim();if(!name)return alert('캠핑장명을 입력해주세요.');const s=load();if(s.clients.some(c=>c.name===name))return alert('이미 등록된 거래처입니다.');s.clients.push({name,keywords:[name],active:true,createdAt:today()});save(s);renderTab('monitoring')};
   window.monRemoveClient=function(name){if(!confirm(name+' 모니터링을 해제할까요?'))return;const s=load();s.clients=s.clients.filter(c=>c.name!==name);save(s);renderTab('monitoring')};
   window.monOpenSearch=function(name,type){const c=load().clients.find(x=>x.name===name);if(!c)return;window.open(searchUrls(c)[type]||searchUrls(c).blog,'_blank','noopener')};
-  window.monLoadCollected=async function(){
+  window.monLoadCollected=async function(silent=false){
     const btn=document.getElementById('monCollectBtn');
     const old=btn?btn.textContent:'';
     if(btn){btn.disabled=true;btn.textContent='불러오는 중...'}
     try{
-      const res=await fetch('data/monitoring/latest.json?ts='+Date.now(),{cache:'no-store'});
-      if(!res.ok)throw new Error('HTTP '+res.status);
-      const data=await res.json();
+      const currentUid=uid();
+      if(typeof readBriefing!=='function'||currentUid==='local'||currentUid==='guest')throw new Error('로그인한 계정의 브리핑을 불러올 수 없습니다.');
+      const latest=await readBriefing(currentUid),report=latest?.report;
+      if(!report)throw new Error('저장된 거래처 브리핑이 없습니다.');
       const s=load();
-      const active=new Set(s.clients.filter(c=>c.active!==false).map(c=>c.name));
       const existing=new Set(s.items.map(i=>i.url||i.id));
-      const incoming=(Array.isArray(data.items)?data.items:[]).filter(i=>active.has(i.client));
+      const incoming=(report.rows||[]).flatMap(row=>(row.mentions||[]).map(m=>({
+        client:row.name,title:m.title,url:m.url,summary:m.summary,source:m.kind+(m.verification==='read'?' · 원문 확인':' · 검색에서 발견'),date:m.publishedAt,publishedAt:m.publishedAt,verification:m.verification
+      })));
+      const knownClients=new Set(s.clients.map(c=>c.name));
+      incoming.forEach(i=>{if(!knownClients.has(i.client)){knownClients.add(i.client);s.clients.push({name:i.client,keywords:[i.client],active:true,createdAt:today(),automatic:true})}});
       let added=0;
       incoming.forEach(i=>{
         const key=i.url||i.id;
@@ -131,7 +135,7 @@
           title:i.title||'제목 없음',
           url:i.url||'',
           summary:i.summary||'',
-          source:i.source||'자동 수집',
+          source:i.source||'글 모니터링',
           date:i.date||today(),
           publishedAt:i.publishedAt||'',
           sentiment:i.sentiment||classify(i.title||'',i.summary||''),
@@ -139,17 +143,18 @@
         });
         added++;
       });
-      const generated=data.generatedAt?new Date(data.generatedAt).toLocaleString('ko-KR'):'수집 시각 없음';
-      const failures=Array.isArray(data.failures)?data.failures.length:0;
-      s.meta={lastCollectedAt:generated,watchlistCount:data.watchlistCount||active.size,collectedCount:data.count||0,addedCount:added,failures};
+      const generated=report.generatedAt?new Date(report.generatedAt).toLocaleString('ko-KR'):'집계 시각 없음';
+      s.meta={lastCollectedAt:generated,watchlistCount:s.clients.filter(c=>c.active!==false).length,collectedCount:incoming.length,addedCount:added,failures:0};
       save(s);
-      renderTab('monitoring');
-      alert('자동 수집 결과\n감시 거래처: '+(data.watchlistCount||active.size)+'개\n수집 후보: '+(data.count||0)+'건\n새로 추가: '+added+'건\n실패 소스: '+failures+'건\n수집 시각: '+generated);
+      renderClients();renderItems();
+      if(!silent)alert('최신 검색 글\n글이 있는 거래처: '+new Set(incoming.map(i=>i.client)).size+'개\n확보 글: '+incoming.length+'건\n새로 추가: '+added+'건\n브리핑 집계: '+generated);
     }catch(e){
-      alert('자동 수집 결과를 불러오지 못했습니다. 배포된 data/monitoring/latest.json 파일을 확인해주세요.\n'+(e.message||e));
+      const status=document.getElementById('monStatusBox');
+      if(status)status.textContent='최신 검색 글을 불러오지 못했습니다: '+(e.message||e);
+      if(!silent)alert('최신 검색 글을 불러오지 못했습니다.\n'+(e.message||e));
     }finally{
       const next=document.getElementById('monCollectBtn');
-      if(next){next.disabled=false;next.textContent=old||'자동 수집 결과 불러오기'}
+      if(next){next.disabled=false;next.textContent=old||'최신 검색 글 불러오기'}
     }
   };
   window.monCopyWatchlist=function(){
