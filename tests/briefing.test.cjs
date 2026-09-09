@@ -132,13 +132,16 @@ test('monitoring imports private briefing mentions instead of a public static re
   assert.doesNotMatch(monitoring,/fetch\('data\/monitoring\/latest\.json/);
 });
 test('monitoring loads private mentions and groups a newly discovered client',async()=>{
-  const values=new Map(),elements={monCollectBtn:{textContent:'불러오기'},monStatusBox:{},monClientList:{},monPendingList:{},monHistoryList:{}};
+  const values=new Map([['camfit_monitoring_v1_user-1',JSON.stringify({clients:[{name:'자동 업체'}],items:[],logs:[]})]]),elements={monCollectBtn:{textContent:'불러오기'},monStatusBox:{},monCollectedStatus:{},monCollectedCount:{},monCollectedList:{},monClientList:{},monPendingList:{},monHistoryList:{}};
   const ctx=vm.createContext({secureUid:'user-1',localStorage:{getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)},document:{getElementById:id=>elements[id]||null},readBriefing:async()=>({report:{generatedAt:NOW,rows:[{name:'새 업체',mentions:[{title:'후기',url:'https://example.com/review',summary:'요약',kind:'방문 후기',verification:'read',publishedAt:'2026-09-02'}]}]}}),alert:()=>{},confirm:()=>true});
   ctx.window=ctx;vm.runInContext(fs.readFileSync(require.resolve('../monitoring.js'),'utf8'),ctx);
+  ctx.monitoringTab();
   await ctx.monLoadCollected(true);
   const stored=JSON.parse(values.get('camfit_monitoring_v1_user-1'));
-  assert.equal(stored.clients.some(c=>c.name==='새 업체'),true);
+  assert.equal(stored.clients.length,0);
+  assert.equal(stored.archivedClients[0].name,'자동 업체');
   assert.equal(stored.items[0].client,'새 업체');assert.equal(stored.items[0].title,'후기');
+  assert.match(elements.monCollectedList.innerHTML,/새 업체/);assert.match(elements.monCollectedList.innerHTML,/후기/);
 });
 function rsContext(rows){
   const section=html.slice(html.indexOf('function dashboardCurrentYear()'),html.indexOf('function onlineRsRateMatch('));

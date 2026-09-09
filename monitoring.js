@@ -1,5 +1,6 @@
 (function(){
   const STORE='camfit_monitoring_v1_';
+  const MANUAL_ONLY='camfit_monitoring_manual_only_20260909_';
   const today=()=>new Date().toISOString().slice(0,10);
   const uid=()=>typeof secureUid==='string'?secureUid:'local';
   const key=()=>STORE+uid();
@@ -22,12 +23,10 @@
   }
   function seed(){
     const s=load();
-    if(!s.clients.length){
-      let names=[];
-      try{names=(typeof window.cmLoad==='function'?window.cmLoad():[]).map(c=>c.name)}catch(e){}
-      if(!names.length)names=campNames().slice(0,10);
-      s.clients=names.slice(0,10).map(name=>({name,keywords:[name],active:true,createdAt:today()}));
-      save(s);
+    const migration=MANUAL_ONLY+uid();
+    if(!localStorage.getItem(migration)){
+      s.archivedClients=[...(s.archivedClients||[]),...s.clients].filter((c,i,a)=>c?.name&&a.findIndex(x=>x?.name===c.name)===i);
+      s.clients=[];localStorage.setItem(migration,'1');save(s);
     }
     return s;
   }
@@ -73,8 +72,9 @@
       <div class="kpi"><div class="label">주의 필요</div><div class="value down">${attention}건</div></div>
       <div class="kpi"><div class="label">이번 달 발송완료</div><div class="value" style="color:var(--green)">${sent}건</div></div>
     </div>
+    <div class="panel"><h3><span class="icon" style="background:var(--green)"></span>검색된 글 <span id="monCollectedCount" class="tag tag-green" style="margin-left:6px">불러오는 중</span></h3><div id="monCollectedStatus" style="color:var(--text2);font-size:12px;margin-bottom:12px">로그인 계정의 최신 브리핑 글을 불러오는 중입니다.</div><div id="monCollectedList"></div></div>
     <div class="grid2">
-      <div class="panel"><h3><span class="icon" style="background:var(--accent)"></span>거래처 등록</h3>
+      <div class="panel"><h3><span class="icon" style="background:var(--accent)"></span>거래처 등록 ${(s.archivedClients||[]).length?'<button class="btn" style="float:right;background:var(--card2);color:var(--text);font-size:11px" onclick="monRestoreArchivedClients()">이전 목록 복구</button>':''}</h3>
         <div class="filter-row"><div style="position:relative;flex:1;min-width:240px"><input class="search" id="monClientName" placeholder="캠핑장명 또는 키워드 입력..." autocomplete="off" oninput="monClientAutoComplete()" onfocus="monClientAutoComplete()" style="width:100%"><div id="monClientAC" style="position:absolute;top:100%;left:0;width:100%;max-height:240px;overflow-y:auto;background:var(--card);border:1px solid var(--border);border-radius:8px;display:none;z-index:70;box-shadow:0 12px 30px rgba(0,0,0,.24)"></div></div><button class="btn btn-green" onclick="monAddClient()">추가</button></div>
         <div id="monClientList"></div>
       </div>
@@ -105,8 +105,9 @@
     ac.style.display='block';
   };
   window.monPickClient=function(name){const input=document.getElementById('monClientName');const ac=document.getElementById('monClientAC');if(input)input.value=name;if(ac)ac.style.display='none'};
-  window.monAddClient=function(){const el=document.getElementById('monClientName');const name=(el?.value||'').trim();if(!name)return alert('캠핑장명을 입력해주세요.');const s=load();if(s.clients.some(c=>c.name===name))return alert('이미 등록된 거래처입니다.');s.clients.push({name,keywords:[name],active:true,createdAt:today()});save(s);renderTab('monitoring')};
+  window.monAddClient=function(){const el=document.getElementById('monClientName');const name=(el?.value||'').trim();if(!name)return alert('캠핑장명을 입력해주세요.');const s=load();if(s.clients.some(c=>c.name===name))return alert('이미 등록된 거래처입니다.');s.clients.push({name,keywords:[name],active:true,createdAt:today(),manual:true});save(s);renderTab('monitoring')};
   window.monRemoveClient=function(name){if(!confirm(name+' 모니터링을 해제할까요?'))return;const s=load();s.clients=s.clients.filter(c=>c.name!==name);save(s);renderTab('monitoring')};
+  window.monRestoreArchivedClients=function(){const s=load(),current=new Set(s.clients.map(c=>c.name));(s.archivedClients||[]).forEach(c=>{if(c?.name&&!current.has(c.name)){current.add(c.name);s.clients.push(c)}});s.archivedClients=[];save(s);renderTab('monitoring')};
   window.monOpenSearch=function(name,type){const c=load().clients.find(x=>x.name===name);if(!c)return;window.open(searchUrls(c)[type]||searchUrls(c).blog,'_blank','noopener')};
   window.monLoadCollected=async function(silent=false){
     const btn=document.getElementById('monCollectBtn');
@@ -122,8 +123,6 @@
       const incoming=(report.rows||[]).flatMap(row=>(row.mentions||[]).map(m=>({
         client:row.name,title:m.title,url:m.url,summary:m.summary,source:m.kind+(m.verification==='read'?' · 원문 확인':' · 검색에서 발견'),date:m.publishedAt,publishedAt:m.publishedAt,verification:m.verification
       })));
-      const knownClients=new Set(s.clients.map(c=>c.name));
-      incoming.forEach(i=>{if(!knownClients.has(i.client)){knownClients.add(i.client);s.clients.push({name:i.client,keywords:[i.client],active:true,createdAt:today(),automatic:true})}});
       let added=0;
       incoming.forEach(i=>{
         const key=i.url||i.id;
@@ -146,11 +145,14 @@
       const generated=report.generatedAt?new Date(report.generatedAt).toLocaleString('ko-KR'):'집계 시각 없음';
       s.meta={lastCollectedAt:generated,watchlistCount:s.clients.filter(c=>c.active!==false).length,collectedCount:incoming.length,addedCount:added,failures:0};
       save(s);
+      renderCollected(incoming,generated);
       renderClients();renderItems();
       if(!silent)alert('최신 검색 글\n글이 있는 거래처: '+new Set(incoming.map(i=>i.client)).size+'개\n확보 글: '+incoming.length+'건\n새로 추가: '+added+'건\n브리핑 집계: '+generated);
     }catch(e){
       const status=document.getElementById('monStatusBox');
       if(status)status.textContent='최신 검색 글을 불러오지 못했습니다: '+(e.message||e);
+      const collectedStatus=document.getElementById('monCollectedStatus');
+      if(collectedStatus)collectedStatus.textContent='검색된 글을 불러오지 못했습니다: '+(e.message||e);
       if(!silent)alert('최신 검색 글을 불러오지 못했습니다.\n'+(e.message||e));
     }finally{
       const next=document.getElementById('monCollectBtn');
@@ -174,6 +176,14 @@
     const map=new Map();
     items.forEach(i=>{if(!map.has(i.client))map.set(i.client,[]);map.get(i.client).push(i)});
     return [...map.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ko'));
+  }
+  function renderCollected(items,generated){
+    const target=document.getElementById('monCollectedList'),count=document.getElementById('monCollectedCount'),status=document.getElementById('monCollectedStatus');
+    if(!target)return;
+    const groups=clientGroups(items).map(([client,list])=>[client,list.sort((a,b)=>String(b.publishedAt||b.date||'').localeCompare(String(a.publishedAt||a.date||'')))]).sort((a,b)=>String(b[1][0]?.publishedAt||'').localeCompare(String(a[1][0]?.publishedAt||''))||a[0].localeCompare(b[0],'ko'));
+    if(count)count.textContent=groups.length+'개 업체 · '+items.length+'건';
+    if(status)status.textContent='브리핑 집계 '+generated+' · 거래처 등록 여부와 관계없이 확인된 글을 표시합니다.';
+    target.innerHTML=groups.map(([client,list])=>`<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden;background:var(--bg)"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 14px;background:rgba(255,255,255,.03)"><strong>${esc(client)}</strong><span class="tag tag-blue">${list.length}건</span></div><div style="padding:12px">${list.map(i=>`<div style="padding:10px 2px;border-bottom:1px solid var(--border)"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="tag ${i.verification==='read'?'tag-green':'tag-orange'}">${i.verification==='read'?'원문 확인':'검색에서 발견'}</span><span style="color:var(--text2);font-size:12px">${esc(i.publishedAt||i.date||'작성일 미상')} · ${esc(i.source||'웹')}</span></div><a class="camp-link" target="_blank" rel="noopener" href="${esc(i.url||'#')}" style="display:inline-block;margin-top:7px">${esc(i.title||'제목 없음')}</a><p style="color:var(--text2);font-size:12px;line-height:1.55;margin-top:6px">${esc(i.summary||'요약 없음')}</p></div>`).join('')}</div></div>`).join('')||'<div style="color:var(--text2);text-align:center;padding:26px">아직 확인된 검색 글이 없습니다.</div>';
   }
   function groupedItems(items,history){
     if(!items.length)return '';
