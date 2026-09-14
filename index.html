@@ -107,6 +107,10 @@ th.sortable .arr-up,th.sortable .arr-down{display:block}
 .map-client-name{color:var(--accent);font-weight:700;text-decoration:none;display:inline-block;margin-bottom:4px}
 .map-client-name:hover{text-decoration:underline}
 .map-client-address{font-size:12px;color:var(--text2);white-space:normal;line-height:1.45}
+.map-client-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px}
+.map-grade{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;background:rgba(168,85,247,.14);color:#c084fc;border:1px solid rgba(192,132,252,.28);font-size:11px;font-weight:800}
+.map-friendly{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid var(--border);color:var(--text2)}
+.map-friendly.checked{background:rgba(34,197,94,.13);border-color:rgba(74,222,128,.3);color:#4ade80}
 .map-frame-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
 .map-selected{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px}
 .map-selected-info{min-width:0}.map-selected-info strong{display:block}.map-selected-info span{font-size:12px;color:var(--text2)}
@@ -814,6 +818,17 @@ let mapBoundsTimer=null;
 let mapCoordCache={};
 try{mapCoordCache=JSON.parse(localStorage.getItem(MAP_COORD_KEY)||'{}')}catch(e){mapCoordCache={}}
 function escMap(value){return String(value||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
+function mapClientGrade(c){return String(c?.g||c?.grade||c?.['업체 등급']||'').trim()||'미지정'}
+function friendlyFlag(value){
+  if(value===true||value===1)return true;
+  const normalized=String(value??'').trim().toLowerCase().replace(/\s+/g,'');
+  return ['y','yes','true','1','o','ok','완료','제안','제안함','제안완료','체크','v','✓','✔','☑'].includes(normalized);
+}
+function mapClientFriendly(c){return friendlyFlag(c?.fr??c?.friendly??c?.friendlyProposed??c?.['프렌들리 제안여부'])}
+function mapClientMeta(c){
+  const proposed=mapClientFriendly(c);
+  return `<span class="map-grade">등급 ${escMap(mapClientGrade(c))}</span><span class="map-friendly ${proposed?'checked':''}">${proposed?'☑':'☐'} 프렌들리 제안</span>`;
+}
 function mapFilteredClients(){
   const q=(document.getElementById('mapSearch')?.value||'').trim().toLowerCase();
   const type=document.getElementById('mapType')?.value||'';
@@ -831,11 +846,11 @@ function renderClientMapList(){
   if(!box)return;
   const located=list.filter(c=>mapCoordCache[c.a]).length;
   document.getElementById('mapCount').textContent=located.toLocaleString()+'개';
-  box.innerHTML=list.map((c,i)=>`<div class="map-client ${c.l===selectedMapClient?'active':''}" onclick="selectMapClient(${i})"><a class="map-client-name" href="${escMap(c.l)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escMap(c.n)} ↗</a><div class="map-client-address">${escMap(c.a)}</div><div style="margin-top:6px"><span class="tag ${c.s==='운영중'?'tag-green':'tag-orange'}">${escMap(c.s)}</span> <span class="tag tag-blue">${escMap(c.ct||'거래처')}</span></div></div>`).join('')||'<div style="padding:30px;text-align:center;color:var(--text2)">검색 결과가 없습니다.</div>';
+  box.innerHTML=list.map((c,i)=>`<div class="map-client ${c.l===selectedMapClient?'active':''}" onclick="selectMapClient(${i})"><a class="map-client-name" href="${escMap(c.l)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escMap(c.n)} ↗</a><div class="map-client-address">${escMap(c.a)}</div><div class="map-client-meta"><span class="tag ${c.s==='운영중'?'tag-green':'tag-orange'}">${escMap(c.s)}</span><span class="tag tag-blue">${escMap(c.ct||'거래처')}</span>${mapClientMeta(c)}</div></div>`).join('')||'<div style="padding:30px;text-align:center;color:var(--text2)">검색 결과가 없습니다.</div>';
   window.__mapClients=list;
   refreshMapMarkers();
 }
-function markerInfo(c){return `<div style="padding:12px 14px;min-width:220px;color:#111;line-height:1.45"><strong style="display:block;margin-bottom:4px">${escMap(c.n)}</strong><span style="display:block;font-size:12px;color:#555;margin-bottom:9px">${escMap(c.a)}</span><a href="${escMap(c.l)}" target="_blank" rel="noopener" style="color:#2563eb;font-size:12px;font-weight:700">캠핏 바로가기 ↗</a></div>`}
+function markerInfo(c){const proposed=mapClientFriendly(c);return `<div style="padding:12px 14px;min-width:240px;color:#111;line-height:1.45"><strong style="display:block;margin-bottom:4px">${escMap(c.n)}</strong><span style="display:block;font-size:12px;color:#555;margin-bottom:8px">${escMap(c.a)}</span><div style="font-size:12px;margin-bottom:9px"><b>업체 등급</b> ${escMap(mapClientGrade(c))} · <b>${proposed?'☑':'☐'} 프렌들리 제안</b></div><a href="${escMap(c.l)}" target="_blank" rel="noopener" style="color:#2563eb;font-size:12px;font-weight:700">캠핏 바로가기 ↗</a></div>`}
 function addMapMarker(c,coords){
   if(!clientMapInstance||mapMarkers.has(c.l))return mapMarkers.get(c.l);
   const pos=new kakao.maps.LatLng(coords.lat,coords.lng);
@@ -885,7 +900,7 @@ function selectMapClient(index){
   const c=(window.__mapClients||[])[index];
   if(!c)return;
   selectedMapClient=c.l;
-  document.getElementById('mapSelected').innerHTML=`<div class="map-selected-info"><strong>${escMap(c.n)}</strong><span>${escMap(c.a)}</span></div><a class="btn btn-primary" href="${escMap(c.l)}" target="_blank" rel="noopener" style="text-decoration:none;white-space:nowrap">캠핏 바로가기 ↗</a>`;
+  document.getElementById('mapSelected').innerHTML=`<div class="map-selected-info"><strong>${escMap(c.n)}</strong><span>${escMap(c.a)}</span><div class="map-client-meta">${mapClientMeta(c)}</div></div><a class="btn btn-primary" href="${escMap(c.l)}" target="_blank" rel="noopener" style="text-decoration:none;white-space:nowrap">캠핏 바로가기 ↗</a>`;
   geocodeClient(c,true);
   renderClientMapList();
 }
@@ -2543,7 +2558,9 @@ async function secureImportFiles(files){
     const h=rows[0].map(v=>String(v).trim()),idx=n=>h.indexOf(n);
     if(idx('고유ID')>=0){
       const addr=idx('주소'),site=idx('운영중인 사이트 수')>=0?idx('운영중인 사이트 수'):idx('운영중인 방 수');
-      rows.slice(1).forEach(r=>{const id=String(r[idx('고유ID')]||'').trim(),name=String(r[idx('캠핑장명')]||'').trim();if(!id||!name)return;const supplied=String(r[idx('링크')]||'').trim();result.raw.camps.push({n:name,s:String(r[idx('운영상태')]||''),r:String(r[idx('등록상태')]||''),p:String(r[idx('플랜명')]||''),a:String(r[addr]||''),t:String(r[idx('사업자번호')]||''),z:Number(r[site])||0,rv:Number(r[idx('리뷰 수')])||0,ex:Number(r[idx('노출 수')])||0,fv:Number(r[idx('찜 수')])||0,l:supplied||`https://camfit.co.kr/${h.includes('운영중인 방 수')?'accommodation':'camp'}/${id}`,h:String(r[idx('캠지기ID')]||''),mp:String(r[idx('담당MD 플랜명')]||''),bt:String(r[idx('업체 종목')]||''),zt:String(r[idx('보유 존 타입')]||''),ct:h.includes('운영중인 방 수')?'숙소':'캠핑장'});});
+      const grade=headerIndex(h,['업체 등급','업체등급','거래처 등급','거래처등급','등급']);
+      const friendly=headerIndex(h,['프렌들리 제안여부','프렌들리 제안 여부','프렌들리제안여부','프렌들리 제안','프렌들리']);
+      rows.slice(1).forEach(r=>{const id=String(r[idx('고유ID')]||'').trim(),name=String(r[idx('캠핑장명')]||'').trim();if(!id||!name)return;const supplied=String(r[idx('링크')]||'').trim();result.raw.camps.push({n:name,s:String(r[idx('운영상태')]||''),r:String(r[idx('등록상태')]||''),p:String(r[idx('플랜명')]||''),a:String(r[addr]||''),t:String(r[idx('사업자번호')]||''),z:Number(r[site])||0,rv:Number(r[idx('리뷰 수')])||0,ex:Number(r[idx('노출 수')])||0,fv:Number(r[idx('찜 수')])||0,l:supplied||`https://camfit.co.kr/${h.includes('운영중인 방 수')?'accommodation':'camp'}/${id}`,h:String(r[idx('캠지기ID')]||''),mp:String(r[idx('담당MD 플랜명')]||''),bt:String(r[idx('업체 종목')]||''),zt:String(r[idx('보유 존 타입')]||''),ct:h.includes('운영중인 방 수')?'숙소':'캠핑장',g:grade>=0?String(r[grade]||'').trim():'',fr:friendly>=0?friendlyFlag(r[friendly]):false});});
     }else if(headerIndex(h,['MD 플랜 수수료(매출 비례)','MD 플랜 수수료','MD플랜수수료','매출 비례'])>=0){
       const agg={};rows.slice(1).forEach(r=>{
         const name=textCell(getCellByHeaders(r,h,['현재 캠핑장 명','현재 캠핑장명','사업자명','캠핑장명','업체명'],1));
