@@ -2257,7 +2257,7 @@ async function loadNewsletters(forceRefresh){
               <a href="${item.url}" target="_blank" style="color:var(--text);text-decoration:none;font-size:14px;font-weight:500;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.title}</a>
               ${item.description?`<p style="color:var(--text2);font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.description.slice(0,60)}...</p>`:''}
             </div>
-            <span class="tag tag-blue" style="flex-shrink:0">${item.category||item.source||''}</span>
+              <span class="tag tag-blue" style="flex-shrink:0">${nlEsc(item.insight?.tags?.[0]||item.category||item.source||'')}</span>
           </div>
         `).join('')}
         ${(nl.items||[]).length>5?`<div style="text-align:center;color:var(--text2);font-size:12px;padding:4px">외 ${nl.items.length-5}건 더보기 →</div>`:''}
@@ -2307,6 +2307,7 @@ function openNewsletterDetail(idx){
             </div>
             <a href="${item.url}" target="_blank" style="color:var(--text);text-decoration:none;font-size:15px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px">${item.title}</a>
             ${item.summary?`<p style="color:var(--text2);font-size:13px;line-height:1.6;margin:0">${item.summary}</p>`:item.description?`<p style="color:var(--text2);font-size:13px;line-height:1.6;margin:0">${item.description}</p>`:''}
+            ${newsletterInsightHtml(item)}
             <div style="margin-top:8px"><a href="${item.url}" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">원문 보기 →</a></div>
           </div>
         `).join('')}
@@ -2318,6 +2319,28 @@ function openNewsletterDetail(idx){
 
 function nlEsc(v){
   return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function newsletterInsightHtml(item){
+  const insight=item?.insight||{};
+  const tags=Array.isArray(insight.tags)?insight.tags.filter(Boolean):[];
+  const rows=[];
+  if(insight.strength)rows.push(`<div><strong>확인된 강점</strong> ${nlEsc(insight.strength)}</div>`);
+  if(insight.customer_signal&&insight.customer_signal!=='고객 반응 미확인')rows.push(`<div><strong>캠퍼 반응</strong> ${nlEsc(insight.customer_signal)}</div>`);
+  if(insight.lesson)rows.push(`<div><strong>운영자가 배울 점</strong> ${nlEsc(insight.lesson)}</div>`);
+  if(insight.apply)rows.push(`<div><strong>적용 전 확인</strong> ${nlEsc(insight.apply)}</div>`);
+  if(!tags.length&&!rows.length)return '';
+  return `<div style="margin-top:12px;padding:10px 12px;border-left:3px solid var(--green);background:rgba(52,211,153,.08);color:var(--text2);font-size:12px;line-height:1.6"><div style="color:var(--green);font-weight:700;margin-bottom:4px">배울 포인트${tags.length?` · ${tags.map(nlEsc).join(' · ')}`:''}</div>${rows.join('')}</div>`;
+}
+function newsletterInsightText(item){
+  const insight=item?.insight||{};
+  const lines=[];
+  const tags=Array.isArray(insight.tags)?insight.tags.filter(Boolean):[];
+  if(tags.length)lines.push(`🏷️ 배울 포인트: ${tags.join(' · ')}`);
+  if(insight.strength)lines.push(`✅ 확인된 강점: ${insight.strength}`);
+  if(insight.customer_signal&&insight.customer_signal!=='고객 반응 미확인')lines.push(`👀 캠퍼 반응: ${insight.customer_signal}`);
+  if(insight.lesson)lines.push(`🎯 운영자가 배울 점: ${insight.lesson}`);
+  if(insight.apply)lines.push(`🛠️ 적용 전 확인: ${insight.apply}`);
+  return lines;
 }
 function newsletterFileName(nl){
   const w=nl.week_info||{};
@@ -2354,6 +2377,7 @@ function renderNewsletterReviewState(idx){
       </div>
       <a href="${nlEsc(item.url)}" target="_blank" style="color:var(--text);text-decoration:none;font-size:15px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px">${nlEsc(item.title)}</a>
       ${desc}
+      ${newsletterInsightHtml(item)}
       <div style="margin-top:8px"><a href="${nlEsc(item.url)}" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">원문 보기 →</a></div>
     </div>`;
   }).join('');
@@ -2433,6 +2457,8 @@ function copyNewsletterForKakao(idx){
     lines.push('');
     const desc=item.summary||item.description;
     if(desc){lines.push(`💬 ${desc}`);lines.push('');}
+    const insightLines=newsletterInsightText(item);
+    if(insightLines.length){lines.push(...insightLines);lines.push('');}
     lines.push(`🔗 ${item.url}`);
     lines.push('');
     lines.push('ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ');
