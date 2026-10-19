@@ -2255,7 +2255,7 @@ async function loadNewsletters(forceRefresh){
             <span style="color:var(--accent);font-weight:700;min-width:20px">${i+1}</span>
             <div style="flex:1;min-width:0">
               <a href="${item.url}" target="_blank" style="color:var(--text);text-decoration:none;font-size:14px;font-weight:500;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.title}</a>
-              ${item.description?`<p style="color:var(--text2);font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.description.slice(0,60)}...</p>`:''}
+              ${newsletterReferenceText(item)?`<p style="color:var(--text2);font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💡 ${nlEsc(newsletterReferenceText(item))}</p>`:''}
             </div>
               <span class="tag tag-blue" style="flex-shrink:0">${nlEsc(item.insight?.tags?.[0]||item.category||item.source||'')}</span>
           </div>
@@ -2306,7 +2306,6 @@ function openNewsletterDetail(idx){
               ${item.published_date?`<span style="color:var(--text2);font-size:11px;white-space:nowrap">${new Date(item.published_date).toLocaleDateString('ko-KR')}</span>`:''}
             </div>
             <a href="${item.url}" target="_blank" style="color:var(--text);text-decoration:none;font-size:15px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px">${item.title}</a>
-            ${item.summary?`<p style="color:var(--text2);font-size:13px;line-height:1.6;margin:0">${item.summary}</p>`:item.description?`<p style="color:var(--text2);font-size:13px;line-height:1.6;margin:0">${item.description}</p>`:''}
             ${newsletterInsightHtml(item)}
             <div style="margin-top:8px"><a href="${item.url}" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">원문 보기 →</a></div>
           </div>
@@ -2320,27 +2319,28 @@ function openNewsletterDetail(idx){
 function nlEsc(v){
   return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
-function newsletterInsightHtml(item){
+function newsletterReferenceText(item,limit=140){
   const insight=item?.insight||{};
-  const tags=Array.isArray(insight.tags)?insight.tags.filter(Boolean):[];
-  const rows=[];
-  if(insight.strength)rows.push(`<div><strong>확인된 강점</strong> ${nlEsc(insight.strength)}</div>`);
-  if(insight.customer_signal&&insight.customer_signal!=='고객 반응 미확인')rows.push(`<div><strong>캠퍼 반응</strong> ${nlEsc(insight.customer_signal)}</div>`);
-  if(insight.lesson)rows.push(`<div><strong>운영자가 배울 점</strong> ${nlEsc(insight.lesson)}</div>`);
-  if(insight.apply)rows.push(`<div><strong>적용 전 확인</strong> ${nlEsc(insight.apply)}</div>`);
-  if(!tags.length&&!rows.length)return '';
-  return `<div style="margin-top:12px;padding:10px 12px;border-left:3px solid var(--green);background:rgba(52,211,153,.08);color:var(--text2);font-size:12px;line-height:1.6"><div style="color:var(--green);font-weight:700;margin-bottom:4px">배울 포인트${tags.length?` · ${tags.map(nlEsc).join(' · ')}`:''}</div>${rows.join('')}</div>`;
+  const candidates=[insight.lesson,insight.strength,item?.summary,item?.description];
+  const labelPattern=/^(?:확인된 자료 발췌|운영 적용 제안|확인된 강점|운영자가 배울 점|적용 전 확인|캠퍼 반응)\s*:\s*/;
+  for(const value of candidates){
+    let text=String(value??'').replace(/\s+/g,' ').trim().replace(labelPattern,'').trim();
+    if(!text)continue;
+    const sentences=text.split(/(?<=[.!?。！？])\s+/).filter(Boolean).slice(0,2);
+    text=sentences.join(' ').trim();
+    if(text.length>limit)text=text.slice(0,limit).replace(/\s+\S*$/,'').replace(/[.,;: ]+$/,'')+'…';
+    return text;
+  }
+  return '';
+}
+function newsletterInsightHtml(item){
+  const reference=newsletterReferenceText(item);
+  if(!reference)return '';
+  return `<div style="margin-top:12px;padding:10px 12px;border-left:3px solid var(--green);background:rgba(52,211,153,.08);color:var(--text2);font-size:12px;line-height:1.6"><div style="color:var(--green);font-weight:700;margin-bottom:4px">💡 참고할 부분</div><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${nlEsc(reference)}</div></div>`;
 }
 function newsletterInsightText(item){
-  const insight=item?.insight||{};
-  const lines=[];
-  const tags=Array.isArray(insight.tags)?insight.tags.filter(Boolean):[];
-  if(tags.length)lines.push(`🏷️ 배울 포인트: ${tags.join(' · ')}`);
-  if(insight.strength)lines.push(`✅ 확인된 강점: ${insight.strength}`);
-  if(insight.customer_signal&&insight.customer_signal!=='고객 반응 미확인')lines.push(`👀 캠퍼 반응: ${insight.customer_signal}`);
-  if(insight.lesson)lines.push(`🎯 운영자가 배울 점: ${insight.lesson}`);
-  if(insight.apply)lines.push(`🛠️ 적용 전 확인: ${insight.apply}`);
-  return lines;
+  const reference=newsletterReferenceText(item);
+  return reference?[`💡 참고할 부분: ${reference}`]:[];
 }
 function newsletterFileName(nl){
   const w=nl.week_info||{};
@@ -2366,7 +2366,6 @@ function renderNewsletterReviewState(idx){
   if(!list)return;
   list.innerHTML=items.map((item,i)=>{
     const date=item.published_date?`<span style="color:var(--text2);font-size:11px;white-space:nowrap">${new Date(item.published_date).toLocaleDateString('ko-KR')}</span>`:'';
-    const desc=item.summary?`<p style="color:var(--text2);font-size:13px;line-height:1.6;margin:0">${nlEsc(item.summary)}</p>`:item.description?`<p style="color:var(--text2);font-size:13px;line-height:1.6;margin:0">${nlEsc(item.description)}</p>`:'';
     return `<div style="padding:14px 16px;background:var(--card2);border-radius:10px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:8px;min-width:0">
@@ -2376,7 +2375,6 @@ function renderNewsletterReviewState(idx){
         <div style="display:flex;align-items:center;gap:6px">${date}<button onclick="replaceNewsletterItem(${idx},${i})" title="이 기사를 제외하고 후보 기사로 대체" style="width:32px;height:28px;border-radius:6px;border:1px solid rgba(59,130,246,.55);background:rgba(59,130,246,.14);color:#bfdbfe;font-weight:800;cursor:pointer;font-size:11px">교체</button><button onclick="deleteNewsletterItem(${idx},${i})" title="이 기사를 대체 없이 삭제" style="width:32px;height:28px;border-radius:6px;border:1px solid rgba(239,68,68,.5);background:rgba(239,68,68,.12);color:#fecaca;font-weight:800;cursor:pointer;font-size:11px">삭제</button></div>
       </div>
       <a href="${nlEsc(item.url)}" target="_blank" style="color:var(--text);text-decoration:none;font-size:15px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px">${nlEsc(item.title)}</a>
-      ${desc}
       ${newsletterInsightHtml(item)}
       <div style="margin-top:8px"><a href="${nlEsc(item.url)}" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">원문 보기 →</a></div>
     </div>`;
