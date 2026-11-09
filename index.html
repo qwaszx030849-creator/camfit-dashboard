@@ -2321,8 +2321,8 @@ function nlEsc(v){
 }
 function newsletterReferenceText(item,limit=140){
   const insight=item?.insight||{};
-  const candidates=[insight.lesson,insight.strength,item?.summary,item?.description];
-  const labelPattern=/^(?:확인된 자료 발췌|운영 적용 제안|확인된 강점|운영자가 배울 점|적용 전 확인|캠퍼 반응)\s*:\s*/;
+  const candidates=[insight.lesson,insight.strength,item?.summary];
+  const labelPattern=/(?:확인된 자료 발췌|운영 적용 제안|확인된 강점|운영자가 배울 점|적용 전 확인|캠퍼 반응)\s*:\s*/g;
   for(const value of candidates){
     let text=String(value??'').replace(/\s+/g,' ').trim().replace(labelPattern,'').trim();
     if(!text)continue;
@@ -2341,6 +2341,29 @@ function newsletterInsightHtml(item){
 function newsletterInsightText(item){
   const reference=newsletterReferenceText(item);
   return reference?[`💡 참고할 부분: ${reference}`]:[];
+}
+const NEWSLETTER_OPERATOR_CATEGORIES=new Set([
+  '운영노하우','매출전략','마케팅','산업동향','시설개선','시설안전',
+  '시즌운영','장박운영','리스크관리','위생관리','고객관리','물놀이안전'
+]);
+const NEWSLETTER_NEWS_SOURCES=new Set(['네이버 뉴스','구글 뉴스','뉴스/제도','정부지원','제도/안전']);
+function newsletterIsOperatorCandidate(item){
+  const category=String(item?.category||'').trim();
+  const source=String(item?.source||'').trim();
+  const text=`${item?.title||''} ${item?.summary||''} ${item?.description||''}`;
+  return NEWSLETTER_OPERATOR_CATEGORIES.has(category)
+    || NEWSLETTER_NEWS_SOURCES.has(source)
+    || /(매출|예약률|안전기준|동파|동계|장박|운영 정책)/.test(text);
+}
+function nextNewsletterCandidate(nl,items,operatorOnly){
+  const used=new Set(items.map(item=>item?.url).filter(Boolean));
+  const available=(nl.review_candidates||[]).filter(candidate=>candidate?.url&&!used.has(candidate.url));
+  const hasOperator=available.some(newsletterIsOperatorCandidate);
+  const match=available.find(candidate=>{
+    if(operatorOnly)return newsletterIsOperatorCandidate(candidate);
+    return !hasOperator || !newsletterIsOperatorCandidate(candidate);
+  });
+  return match || (!operatorOnly?available[0]||null:null);
 }
 function newsletterFileName(nl){
   const w=nl.week_info||{};
@@ -2384,19 +2407,16 @@ function replaceNewsletterItem(idx,itemIndex){
   const nl=window._nlCache[idx];
   if(!nl)return;
   const items=nl._reviewItems||[...(nl.items||[])];
-  const candidates=nl.review_candidates||[];
-  const used=new Set(items.map(i=>i.url));
-  let cursor=nl._reviewCandidateCursor||0,replacement=null;
-  while(cursor<candidates.length){
-    const c=candidates[cursor++];
-    if(c?.url&&!used.has(c.url)){replacement=c;break;}
-  }
-  if(!replacement){deleteNewsletterItem(idx,itemIndex);return;}
   const removed=items[itemIndex];
+  if(!removed)return;
   const slot=removed?._reviewOriginalSlot||itemIndex+1;
+  const replacement=nextNewsletterCandidate(nl,items,slot<=2);
+  if(!replacement){
+    if(slot<=2){alert('1~2번은 운영 인사이트·기사 후보가 있을 때만 교체할 수 있습니다. 후보를 추가 수집한 뒤 다시 시도해주세요.');return;}
+    deleteNewsletterItem(idx,itemIndex);return;
+  }
   items[itemIndex]={...replacement,_reviewOriginalSlot:slot};
   nl._reviewItems=items;
-  nl._reviewCandidateCursor=cursor;
   nl._reviewExcluded=[...(nl._reviewExcluded||[]),slot];
   nl._reviewChanges=[...(nl._reviewChanges||[]),{type:'replace',slot,removed,replacement}];
   renderNewsletterReviewState(idx);
@@ -2453,8 +2473,6 @@ function copyNewsletterForKakao(idx){
   cleanedReviewItems(nl).forEach((item,i)=>{
     lines.push(`📌 ${i+1}. ${item.title}`);
     lines.push('');
-    const desc=item.summary||item.description;
-    if(desc){lines.push(`💬 ${desc}`);lines.push('');}
     const insightLines=newsletterInsightText(item);
     if(insightLines.length){lines.push(...insightLines);lines.push('');}
     lines.push(`🔗 ${item.url}`);
