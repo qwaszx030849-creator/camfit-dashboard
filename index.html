@@ -2410,9 +2410,9 @@ function replaceNewsletterItem(idx,itemIndex){
   const removed=items[itemIndex];
   if(!removed)return;
   const slot=removed?._reviewOriginalSlot||itemIndex+1;
-  const replacement=nextNewsletterCandidate(nl,items,slot<=2);
+  const replacement=nextNewsletterCandidate(nl,items,itemIndex<2);
   if(!replacement){
-    if(slot<=2){alert('1~2번은 운영 인사이트·기사 후보가 있을 때만 교체할 수 있습니다. 후보를 추가 수집한 뒤 다시 시도해주세요.');return;}
+    if(itemIndex<2){alert('현재 1~2번은 운영 인사이트·기사 후보가 있을 때만 교체할 수 있습니다. 후보를 추가 수집한 뒤 다시 시도해주세요.');return;}
     deleteNewsletterItem(idx,itemIndex);return;
   }
   items[itemIndex]={...replacement,_reviewOriginalSlot:slot};
