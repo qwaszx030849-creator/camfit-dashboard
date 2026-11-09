@@ -124,6 +124,24 @@ test('all dashboard scripts compile',()=>{
   new vm.Script(fs.readFileSync(require.resolve('../briefing-ui.js'),'utf8'));
   new vm.Script(fs.readFileSync(require.resolve('../monitoring.js'),'utf8'));
 });
+test('newsletter review decodes source entities, rejects review-like operator false positives, and consumes replacement history',()=>{
+  const reviewSection=html.slice(html.indexOf('function nlEsc'),html.indexOf('function newsletterFileName'));
+  const ctx=vm.createContext({URL,console});
+  vm.runInContext(reviewSection,ctx);
+  assert.equal(vm.runInContext('nlEsc("&quot;비 쏟아져도&quot;")',ctx),'&quot;비 쏟아져도&quot;');
+  const operational={title:'캠핑장 안전 점검 기준',url:'https://blog.naver.com/operator/1',source:'네이버 블로그',category:'시설안전',summary:'분전함 안전 점검 기준과 체크리스트'};
+  const review={title:'[강릉 숙소] 아이와 함께 다녀온 캠핑장',url:'https://blog.naver.com/reviewer/2',source:'네이버 블로그',category:'시설안전',description:'아이와 함께 여행했고 이용했는데 좋았어요. 화재 예방 안내도 있었습니다.'};
+  const news={title:'캠핑장 예약률 동향',url:'https://news.example.com/3',source:'네이버 뉴스',category:'산업동향',summary:'예약률과 시장 동향을 분석한 기사'};
+  ctx.operational=operational;ctx.review=review;ctx.news=news;
+  assert.equal(vm.runInContext('newsletterIsOperatorCandidate(review)',ctx),false);
+  assert.equal(vm.runInContext('newsletterIsOperatorCandidate(operational)',ctx),true);
+  ctx.nl={review_candidates:[operational,review,news],_reviewChanges:[]};
+  ctx.items=[{title:'기존 기사',url:'https://news.example.com/current',source:'네이버 뉴스',category:'산업동향'}];
+  assert.equal(vm.runInContext('nextNewsletterCandidate(nl,items,true).url',ctx),operational.url);
+  ctx.nl._reviewChanges=[{type:'replace',removed:ctx.items[0],replacement:operational}];
+  ctx.items=[operational];
+  assert.equal(vm.runInContext('nextNewsletterCandidate(nl,items,true).url',ctx),news.url);
+});
 test('monitoring imports private briefing mentions instead of a public static result file',()=>{
   const monitoring=fs.readFileSync(require.resolve('../monitoring.js'),'utf8');
   assert.match(monitoring,/await readBriefing\(currentUid\)/);

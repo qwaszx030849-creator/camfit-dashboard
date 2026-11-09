@@ -2317,7 +2317,15 @@ function openNewsletterDetail(idx){
 }
 
 function nlEsc(v){
-  return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  let text=String(v??'');
+  // Naver titles sometimes arrive with entities already encoded. Decode a
+  // bounded number of times before escaping for HTML so &quot; is not shown.
+  for(let i=0;i<2;i++){
+    const decoded=text.replace(/&(quot|amp|lt|gt|apos|#39|#x27);/gi,(_,entity)=>({quot:'"',amp:'&',lt:'<',gt:'>',apos:"'",'#39':"'",'#x27':"'"}[entity.toLowerCase()]));
+    if(decoded===text)break;
+    text=decoded;
+  }
+  return text.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 function newsletterReferenceText(item,limit=140){
   const insight=item?.insight||{};
@@ -2348,6 +2356,7 @@ const NEWSLETTER_OPERATOR_CATEGORIES=new Set([
 ]);
 const NEWSLETTER_NEWS_SOURCES=new Set(['네이버 뉴스','구글 뉴스','뉴스/제도','정부지원','제도/안전']);
 const NEWSLETTER_REVIEW_MARKERS=['후기','추천','다녀','방문','솔직','예약 방법','명소','여행'];
+const NEWSLETTER_REVIEW_CONTENT_MARKERS=['아이와 함께','가족과','다녀왔','방문했','이용했','좋았','좋아요','숙소','여행','우리 자리는','지내는 동안','이번에 이용','체크인','체크아웃','선택 전','캠퍼','캠핑을 다녀'];
 const NEWSLETTER_OPERATION_MARKERS=['매출','예약률','객단가','비수기','장박','동계','동파','안전','소방','전기','화재','난방','운영','관리','정책','기준','점검','체크리스트','수수료','정산','환불','위생','민원','리스크','시장','동향','통계','데이터'];
 function newsletterIsDisallowedCandidate(item){
   const text=`${item?.title||''} ${item?.summary||''} ${item?.description||''}`.toLowerCase();
@@ -2378,10 +2387,25 @@ function newsletterIsOperatorCandidate(item){
   const text=`${title} ${item?.summary||''} ${item?.description||''}`.toLowerCase();
   if(NEWSLETTER_NEWS_SOURCES.has(source))return true;
   if(NEWSLETTER_REVIEW_MARKERS.some(marker=>title.includes(marker)))return false;
-  return NEWSLETTER_OPERATOR_CATEGORIES.has(category)&&NEWSLETTER_OPERATION_MARKERS.some(marker=>text.includes(marker));
+  const operationScore=NEWSLETTER_OPERATION_MARKERS.filter(marker=>text.includes(marker)).length;
+  const reviewScore=NEWSLETTER_REVIEW_CONTENT_MARKERS.filter(marker=>text.includes(marker)).length;
+  // A review can mention safety or management in passing. Require the
+  // operational category and reject blog-like evidence when review signals win.
+  if(reviewScore>=2&&reviewScore>=operationScore)return false;
+  return NEWSLETTER_OPERATOR_CATEGORIES.has(category)&&operationScore>0;
+}
+function newsletterReviewHistoryKeys(nl){
+  const keys=new Set();
+  for(const change of (nl?._reviewChanges||[])){
+    for(const item of [change.removed,change.replacement]){
+      if(item?.url)keys.add(newsletterArticleKey(item));
+    }
+  }
+  return keys;
 }
 function nextNewsletterCandidate(nl,items,operatorOnly){
   const used=new Set(items.map(item=>item?.url).filter(Boolean));
+  const historyKeys=newsletterReviewHistoryKeys(nl);
   const publisherCounts={};
   items.forEach(item=>{
     const publisher=newsletterPublisherKey(item);
@@ -2391,6 +2415,7 @@ function nextNewsletterCandidate(nl,items,operatorOnly){
   const available=(nl.review_candidates||[]).filter(candidate=>{
     if(!candidate?.url||used.has(candidate.url)||newsletterIsDisallowedCandidate(candidate))return false;
     const articleKey=newsletterArticleKey(candidate);
+    if(historyKeys.has(articleKey))return false;
     if(seen.has(articleKey))return false;
     seen.add(articleKey);
     if(items.some(item=>newsletterArticleKey(item)===articleKey))return false;
