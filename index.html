@@ -2347,17 +2347,57 @@ const NEWSLETTER_OPERATOR_CATEGORIES=new Set([
   '시즌운영','장박운영','리스크관리','위생관리','고객관리','물놀이안전'
 ]);
 const NEWSLETTER_NEWS_SOURCES=new Set(['네이버 뉴스','구글 뉴스','뉴스/제도','정부지원','제도/안전']);
+const NEWSLETTER_REVIEW_MARKERS=['후기','추천','다녀','방문','솔직','예약 방법','명소','여행'];
+const NEWSLETTER_OPERATION_MARKERS=['매출','예약률','객단가','비수기','장박','동계','동파','안전','소방','전기','화재','난방','운영','관리','정책','기준','점검','체크리스트','수수료','정산','환불','위생','민원','리스크','시장','동향','통계','데이터'];
+function newsletterIsDisallowedCandidate(item){
+  const text=`${item?.title||''} ${item?.summary||''} ${item?.description||''}`.toLowerCase();
+  const taxAgency=['세무법인','세무사','세무회계','세무대리','세무 상담','세무상담'];
+  const taxTerms=['세금','세무','절세','신고','환급','플랫폼 정산','매출'];
+  const adTerms=['협찬','체험단','광고 대행','무료 상담','상담 문의','구매링크','원고료'];
+  return (taxAgency.some(term=>text.includes(term))&&taxTerms.some(term=>text.includes(term)))||adTerms.some(term=>text.includes(term));
+}
+function newsletterPublisherKey(item){
+  try{
+    const url=new URL(item?.url||'');
+    const host=url.hostname.toLowerCase().replace(/^m\./,'');
+    const firstPath=(url.pathname||'').split('/').filter(Boolean)[0]||'';
+    return (host==='blog.naver.com'||host==='cafe.naver.com')?`${host}/${firstPath}`:host;
+  }catch(e){return '';}
+}
+function newsletterArticleKey(item){
+  try{
+    const url=new URL(item?.url||'');
+    return `${url.hostname.toLowerCase().replace(/^m\./,'')}${url.pathname.replace(/\/$/,'')}`;
+  }catch(e){return String(item?.url||'').trim().toLowerCase();}
+}
 function newsletterIsOperatorCandidate(item){
+  if(newsletterIsDisallowedCandidate(item))return false;
   const category=String(item?.category||'').trim();
   const source=String(item?.source||'').trim();
-  const text=`${item?.title||''} ${item?.summary||''} ${item?.description||''}`;
-  return NEWSLETTER_OPERATOR_CATEGORIES.has(category)
-    || NEWSLETTER_NEWS_SOURCES.has(source)
-    || /(매출|예약률|안전기준|동파|동계|장박|운영 정책)/.test(text);
+  const title=String(item?.title||'').toLowerCase();
+  const text=`${title} ${item?.summary||''} ${item?.description||''}`.toLowerCase();
+  if(NEWSLETTER_NEWS_SOURCES.has(source))return true;
+  if(NEWSLETTER_REVIEW_MARKERS.some(marker=>title.includes(marker)))return false;
+  return NEWSLETTER_OPERATOR_CATEGORIES.has(category)&&NEWSLETTER_OPERATION_MARKERS.some(marker=>text.includes(marker));
 }
 function nextNewsletterCandidate(nl,items,operatorOnly){
   const used=new Set(items.map(item=>item?.url).filter(Boolean));
-  const available=(nl.review_candidates||[]).filter(candidate=>candidate?.url&&!used.has(candidate.url));
+  const publisherCounts={};
+  items.forEach(item=>{
+    const publisher=newsletterPublisherKey(item);
+    if(publisher)publisherCounts[publisher]=(publisherCounts[publisher]||0)+1;
+  });
+  const seen=new Set();
+  const available=(nl.review_candidates||[]).filter(candidate=>{
+    if(!candidate?.url||used.has(candidate.url)||newsletterIsDisallowedCandidate(candidate))return false;
+    const articleKey=newsletterArticleKey(candidate);
+    if(seen.has(articleKey))return false;
+    seen.add(articleKey);
+    if(items.some(item=>newsletterArticleKey(item)===articleKey))return false;
+    const publisher=newsletterPublisherKey(candidate);
+    if(publisher&&(publisherCounts[publisher]||0)>=2)return false;
+    return true;
+  });
   const hasOperator=available.some(newsletterIsOperatorCandidate);
   const match=available.find(candidate=>{
     if(operatorOnly)return newsletterIsOperatorCandidate(candidate);
