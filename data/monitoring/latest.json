@@ -1,23 +1,7 @@
 {
-  "generatedAt": "2026-11-17T06:44:30.791Z",
+  "generatedAt": "2026-11-18T06:02:28.124Z",
   "watchlistCount": 22,
   "count": 0,
-  "failures": [
-    {
-      "client": "영월 당마루 캠핑장",
-      "source": "Google 뉴스",
-      "error": "HTTP 429"
-    },
-    {
-      "client": "태안 바다드림 캠핑장",
-      "source": "Google 뉴스",
-      "error": "HTTP 429"
-    },
-    {
-      "client": "팜스프링 캠핑장",
-      "source": "Google 뉴스",
-      "error": "HTTP 429"
-    }
-  ],
+  "failures": [],
   "items": []
 }
